@@ -1,99 +1,214 @@
+use std::{cell::RefCell, rc::Rc};
+
 use global::Globals;
 use glow::*;
 use midi::*;
-use ui::{*, style::Style};
+use piano_roll::e_piano_roll;
+use selection::{NoteRef, Selection};
+use top_bar::fb_topbar;
+use ui::{
+    element::Element,
+    frame_buf::FrameBuf,
+    gl::RENDER_MODE_SOLID,
+    style::{Colour, Style},
+    text::{Font, Text},
+    *,
+};
 
-mod ui;
-mod piano_roll;
 mod global;
 mod midi;
+mod piano_roll;
+mod selection;
+mod top_bar;
+mod track;
+mod ui;
+mod utils;
 
 fn main() {
     unsafe {
-        let (gl, window, mut events_loop, _context) = create_sdl2_context();
+        let (gl, window, mut events_loop, _context) = gl::create_sdl2_context();
 
-        let program = create_program(&gl, VERTEX_SHADER_SOURCE, FRAGMENT_SHADER_SOURCE);
-        gl.use_program(Some(program));
+        let element_shader =
+            gl::create_program(&gl, MAIN_VERTEX_SHADER_SOURCE, MAIN_FRAGMENT_SHADER_SOURCE);
+        let texture_shader = gl::create_program(
+            &gl,
+            MAIN_VERTEX_SHADER_SOURCE,
+            TEXTURE_FRAGMENT_SHADER_SOURCE,
+        );
 
-        let midi = MidiClip { notes: vec![
-            Note { note: 60, velocity: 100, start: 0, length: 100 },
-            Note { note: 61, velocity: 100, start: 100, length: 100 },
-            Note { note: 62, velocity: 100, start: 500, length: 100 },
-            Note { note: 63, velocity: 100, start: 0, length: 100 },
-        ] };
+        let global_reredner = Rc::new(RefCell::new(false));
 
-        let globals = Globals::create(&gl, program);
+        let font = Font::new();
+        let mut text = Text::new(
+            &gl,
+            "Hello".to_string(),
+            50.,
+            &font,
+            Colour {
+                r: 1.,
+                g: 1.,
+                b: 1.,
+                a: 1.,
+            },
+            p(10., 10.),
+            global_reredner.clone(),
+        );
 
-        let root = piano_roll::e_piano_roll(&gl, &globals, &midi);
+        gl.use_program(Some(element_shader));
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+
+        let midi = MidiClip {
+            notes: vec![
+                Note {
+                    note: 60,
+                    velocity: 100,
+                    start: 0,
+                    length: 100,
+                },
+                Note {
+                    note: 61,
+                    velocity: 100,
+                    start: 100,
+                    length: 100,
+                },
+                Note {
+                    note: 62,
+                    velocity: 100,
+                    start: 50,
+                    length: 100,
+                },
+                Note {
+                    note: 63,
+                    velocity: 100,
+                    start: 0,
+                    length: 100,
+                },
+            ],
+        };
+
+        let (width, height) = window.drawable_size();
+        let screen_dims = ComputedDimensions {
+            width: width as f32,
+            height: height as f32,
+        };
+        let mut globals = Globals::create(&gl, element_shader, texture_shader, screen_dims, font);
+        globals.selection = Selection::MidiNotes(vec![(0, vec![NoteRef { note: 60, start: 0 }])]);
+
+        let mut frame = FrameBuf::new(
+            &gl,
+            None,
+            p(0., 0.),
+            Dimensions {
+                width: Size::FractionOfParent(1.),
+                height: Size::FractionOfParentWithOffset(1., -globals.top_bar_size),
+            },
+            screen_dims,
+        );
+
+        let root = piano_roll::e_piano_roll(
+            &gl,
+            &globals,
+            &midi,
+            0,
+            frame.children_need_rerender.clone(),
+        );
+
+        frame.root_node = Some(root);
+
+        gl.uniform_1_i32(
+            Some(&globals.element_uniform_locations["mode"]),
+            RENDER_MODE_SOLID,
+        );
+
+        // let f = Element::new(
+        //     &gl,
+        //     0.,
+        //     0.,
+        //     Size::Fixed(40.),
+        //     Size::Fixed(40.),
+        //     Some(Style {
+        //         background_colour: Colour {
+        //             r: 1.,
+        //             g: 0.,
+        //             b: 0.,
+        //             a: 1.,
+        //         },
+        //         ..Default::default()
+        //     }),
+        //     vec![],
+        // );
 
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
-        let window_size = gl.get_uniform_location(program, "window_size");
+
+        let mut top_bar = fb_topbar(&gl, &globals, &screen_dims);
 
         let mut style = Style::default();
         style.background_colour.r = 1.;
-        let fuckyou = ui::element::Element::new(
-            &gl,
-            0.,
-            0.,
-            Size::Fixed(10.),
-            Size::Fixed(10.),
-            Some(style),
-            vec![],
-        );
+
+        let mut resize = true;
 
         'render: loop {
-            {
-                for event in events_loop.poll_iter() {
-                    if let sdl2::event::Event::Quit { .. } = event {
-                        break 'render;
+            for event in events_loop.poll_iter() {
+                if let sdl2::event::Event::Quit { .. } = event {
+                    break 'render;
+                }
+
+                println!("{:?}", event);
+
+                if let sdl2::event::Event::Window {
+                    timestamp,
+                    window_id,
+                    win_event,
+                } = event
+                {
+                    if let sdl2::event::WindowEvent::Resized(_, _) = win_event {
+                        println!("Resized");
+                        resize = true;
                     }
                 }
             }
 
+            if resize {
+                resize = false;
+                frame.children_need_rerender.replace(true);
+                top_bar.children_need_rerender.replace(true);
+            }
+
             let (width, height) = window.drawable_size();
             gl.viewport(0, 0, width as i32, height as i32);
-            gl.uniform_2_f32(window_size.as_ref(), width as f32, height as f32);
+            gl.uniform_2_f32(
+                Some(&globals.element_uniform_locations["window_size"]),
+                width as f32,
+                height as f32,
+            );
 
             let screen_dims = ComputedDimensions {
                 width: width as f32,
                 height: height as f32,
             };
 
-            gl.clear(glow::COLOR_BUFFER_BIT);
+            globals.screen_dims = screen_dims;
 
-            root.render(&gl, p(0., 0.), &globals, &screen_dims);
+            gl.clear(glow::COLOR_BUFFER_BIT);
+            // root.render(&gl, p(0., 0.), &globals, &screen_dims);
+
+            // frame.render_children(&gl, &globals, &screen_dims);
+            frame.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
+
+            // top_bar.render_children(&gl, &globals, &screen_dims);
+            top_bar.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
+
+            text.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
+
             window.gl_swap_window();
         }
 
-        root.cleanup(&gl);
+        // root.cleanup(&gl);
+        frame.cleanup(&gl);
 
-        gl.delete_program(program);
+        gl.delete_program(element_shader);
     }
-}
-
-unsafe fn create_sdl2_context() -> (
-    glow::Context,
-    sdl2::video::Window,
-    sdl2::EventPump,
-    sdl2::video::GLContext,
-) {
-    let sdl = sdl2::init().unwrap();
-    let video = sdl.video().unwrap();
-    let gl_attr = video.gl_attr();
-    gl_attr.set_context_profile(sdl2::video::GLProfile::Core);
-    gl_attr.set_context_version(3, 3);
-    gl_attr.set_context_flags().forward_compatible().set();
-    let window = video
-        .window("Hello triangle!", 1024, 769)
-        .opengl()
-        .resizable()
-        .build()
-        .unwrap();
-    let gl_context = window.gl_create_context().unwrap();
-    let gl = glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
-    let event_loop = sdl.event_pump().unwrap();
-
-    (gl, window, event_loop, gl_context)
 }
 
 pub struct Zoom {
@@ -101,77 +216,6 @@ pub struct Zoom {
     v_zoom: f32,
 }
 
-unsafe fn create_program(
-    gl: &glow::Context,
-    vertex_shader_source: &str,
-    fragment_shader_source: &str,
-) -> NativeProgram {
-    let program = gl.create_program().expect("Cannot create program");
-
-    let shader_sources = [
-        (glow::VERTEX_SHADER, vertex_shader_source),
-        (glow::FRAGMENT_SHADER, fragment_shader_source),
-    ];
-
-    let mut shaders = Vec::with_capacity(shader_sources.len());
-
-    for (shader_type, shader_source) in shader_sources.iter() {
-        let shader = gl
-            .create_shader(*shader_type)
-            .expect("Cannot create shader");
-        gl.shader_source(shader, shader_source);
-        gl.compile_shader(shader);
-        if !gl.get_shader_compile_status(shader) {
-            panic!("{}", gl.get_shader_info_log(shader));
-        }
-        gl.attach_shader(program, shader);
-        shaders.push(shader);
-    }
-
-    gl.link_program(program);
-    if !gl.get_program_link_status(program) {
-        panic!("{}", gl.get_program_info_log(program));
-    }
-
-    for shader in shaders {
-        gl.detach_shader(program, shader);
-        gl.delete_shader(shader);
-    }
-
-    program
-}
-
-const VERTEX_SHADER_SOURCE: &str = r#"#version 330
-  in vec4 in_position;
-  out vec2 position;
-  out vec2 uv;
-  uniform vec2 window_size;
-  void main() {
-    position = ((in_position.xy) / window_size) * 2.0 - 1.0;
-    uv = in_position.zw;
-
-    gl_Position = vec4(position, 1.0, 1.0);
-  }"#;
-const FRAGMENT_SHADER_SOURCE: &str = r#"#version 330
-  precision mediump float;
-  in vec2 position;
-  in vec2 uv;
-  out vec4 color;
-  uniform vec2 dims;
-  uniform vec4 background_col;
-  uniform vec4 border_col;
-  uniform float border_width;
-  void main() {
-    color = background_col;
-
-    vec2 pos = uv * dims;
-
-    if (border_width > 0.0
-        && (pos.x < border_width
-        || pos.x > dims.x - border_width
-        || pos.y < border_width
-        || pos.y > dims.y - border_width)) {
-
-      color = border_col;
-    }
-  }"#;
+const MAIN_VERTEX_SHADER_SOURCE: &str = include_str!("shaders/main_vert.vert");
+const MAIN_FRAGMENT_SHADER_SOURCE: &str = include_str!("shaders/main_frag.frag");
+const TEXTURE_FRAGMENT_SHADER_SOURCE: &str = include_str!("shaders/texture_frag.frag");

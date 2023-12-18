@@ -1,84 +1,56 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use glow::*;
 
 use crate::global::Globals;
 
-use super::*;
+use super::gl::{create_quad, Quad};
 use super::style::*;
+use super::text::Text;
+use super::*;
 
 pub struct Element {
     position: Position,
     dimensions: Dimensions,
     children: Vec<Element>,
+    text: Option<Text>,
     style: Style,
-    vbo: NativeBuffer,
-    vao: NativeVertexArray,
+    quad: Quad,
+    needs_rerender: Rc<RefCell<bool>>,
 }
 
 impl Element {
     pub fn new(
         gl: &glow::Context,
-        x: f32,
-        y: f32,
+        position: Position,
         width: Size,
         height: Size,
         style: Option<Style>,
+        text: Option<Text>,
+        needs_rerender: Rc<RefCell<bool>>,
         children: Vec<Element>,
     ) -> Self {
-        let vbo = unsafe { gl.create_buffer().unwrap() };
-        let vao = unsafe { gl.create_vertex_array().unwrap() };
+        needs_rerender.replace(true);
 
         Self {
-            position: p(x, y),
-            dimensions: d(width, height),
+            position,
+            dimensions: Dimensions { width, height },
             children,
             style: match style {
                 Some(style) => style,
                 None => Style::default(),
             },
-            vbo,
-            vao,
+            text,
+            needs_rerender,
+            quad: unsafe { Quad::new(gl) },
         }
     }
 
-    unsafe fn create_quad(&self, gl: &glow::Context, origin: Position, dims: &ComputedDimensions) {
-        let pos = origin + self.position;
-
-        let quad_vertices = [
-            pos.x,
-            pos.y,
-            0.,
-            0.,
-            pos.x + dims.width,
-            pos.y,
-            1.,
-            0.,
-            pos.x + dims.width,
-            pos.y + dims.height,
-            1.,
-            1.,
-            pos.x,
-            pos.y + dims.height,
-            0.,
-            1.,
-        ];
-
-        let quad_vertices_u8: &[u8] = core::slice::from_raw_parts(
-            quad_vertices.as_ptr() as *const u8,
-            quad_vertices.len() * core::mem::size_of::<f32>(),
-        );
-
-        gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, quad_vertices_u8, glow::STATIC_DRAW);
-
-        gl.enable_vertex_attrib_array(0);
-        const DIMENSIONS: i32 = 4;
-        gl.vertex_attrib_pointer_f32(0, DIMENSIONS, glow::FLOAT, false, DIMENSIONS * 4, 0);
-    }
-
     pub fn render(
-        &self,
+        &mut self,
         gl: &glow::Context,
-        origin: Position,
+        origin: ComputedPosition,
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
@@ -91,17 +63,21 @@ impl Element {
             height: self.dimensions.height.to_size(parent_dims.height),
         };
 
+        let comped_pos = self.position.compute(parent_dims);
+
         if self.style.render_self {
             unsafe {
-                gl.use_program(Some(globals.shader));
+                gl.use_program(Some(globals.element_shader));
                 gl.uniform_2_f32(
-                    Some(&(*globals).uniform_locations.dims),
+                    Some(&globals.element_uniform_locations["dims"]),
                     dims.width,
                     dims.height,
                 );
 
-                gl.bind_vertex_array(Some(self.vao));
-                self.create_quad(gl, origin, &dims);
+                gl.bind_vertex_array(Some(self.quad.vao));
+
+                let pos = origin + comped_pos;
+                create_quad(gl, &self.quad.vbo, pos, &dims);
 
                 self.style.set(gl, globals);
                 gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
@@ -111,17 +87,31 @@ impl Element {
             }
         }
 
-        let child_origin = origin + self.position;
+        let child_origin = origin + comped_pos;
 
-        for child in self.children.iter() {
+        if let Some(text) = &mut self.text {
+            let text_pos = child_origin
+                + p_c(
+                    self.style.padding_left + self.style.padding,
+                    - self.style.padding_top + self.style.padding,
+                );
+
+            text.render(gl, text_pos, globals, &dims);
+        }
+
+        for child in self.children.iter_mut() {
             child.render(gl, child_origin, globals, &dims);
         }
     }
 
+    pub fn mutate(&mut self, func: fn (&mut Self)) {
+        func(self);
+        self.needs_rerender.replace(true);
+    }
+
     pub fn cleanup(&self, gl: &glow::Context) {
         unsafe {
-            gl.delete_buffer(self.vbo);
-            gl.delete_vertex_array(self.vao);
+            self.quad.cleanup(gl);
         }
 
         for child in self.children.iter() {

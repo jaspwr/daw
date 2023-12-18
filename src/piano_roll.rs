@@ -1,7 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
+use sdl2::libc::glob;
+
 use crate::{
-    global::Globals,
+    global::{Globals, Viewport},
     midi::*,
     selection::{NoteRef, Selection},
     track::TrackId,
@@ -9,7 +11,6 @@ use crate::{
     ui::*,
     ui::{style::*, text::Text},
     utils::note_name,
-    Zoom,
 };
 
 pub fn e_piano_roll(
@@ -18,11 +19,9 @@ pub fn e_piano_roll(
     midi: &MidiClip,
     track_id: TrackId,
     needs_rerender: Rc<RefCell<bool>>,
-) -> Element {
-    let zoom: Zoom = Zoom {
-        h_zoom: 2.,
-        v_zoom: 12.,
-    };
+) -> ElementRef {
+    globals.viewport.h_zoom.set(2.);
+    globals.viewport.v_zoom.set(12.);
 
     let style = Style {
         render_self: false,
@@ -66,7 +65,7 @@ pub fn e_piano_roll(
                 e_note(
                     gl,
                     n,
-                    &zoom,
+                    &globals.viewport,
                     globals,
                     &notes[n as usize],
                     needs_rerender.clone(),
@@ -79,11 +78,11 @@ pub fn e_piano_roll(
 fn e_note(
     gl: &glow::Context,
     note: i32,
-    zoom: &Zoom,
+    viewport: &Viewport,
     globals: &Globals,
     notes: &Vec<(&Note, bool)>,
     needs_rerender: Rc<RefCell<bool>>,
-) -> Element {
+) -> Rc<RefCell<Element>> {
     let mut row_style = Style::default();
     row_style.border_width = 1.;
     row_style.border_colour = globals.colour_palette.time_grid;
@@ -107,8 +106,7 @@ fn e_note(
         )
     };
 
-    let note_height = zoom.v_zoom;
-    let y = note_height * note as f32;
+    let note_height = viewport.v_zoom.get().borrow().clone();
 
     const KEYBOARD_WIDTH: f32 = 200.;
 
@@ -135,9 +133,11 @@ fn e_note(
 
     let mut children = vec![key];
 
+    let h_zoom = viewport.h_zoom.get_copy();
+    let time_scroll = viewport.time_scroll.get_copy();
+
     for (n, selected) in notes.iter() {
-        let x = KEYBOARD_WIDTH + n.start as f32 * zoom.h_zoom;
-        let width = n.length as f32 * zoom.h_zoom;
+        let width = n.length as f32 * h_zoom;
 
         let mut note_style = Style::default();
         note_style.background_colour = globals.colour_palette.white;
@@ -148,6 +148,8 @@ fn e_note(
             note_style.border_colour = globals.colour_palette.selected;
             note_style.border_width = 2.;
         }
+
+        let x = KEYBOARD_WIDTH + (n.start as f32 - time_scroll) as f32 * h_zoom;
 
         let note = Element::new(
             gl,
@@ -160,10 +162,63 @@ fn e_note(
             vec![],
         );
 
+        let note_cpy = note.clone();
+        let len = n.length;
+        let start = n.start;
+        let time_scroll = viewport.time_scroll.clone();
+        let sub = globals
+            .viewport
+            .h_zoom
+            .subscribe(Box::new(move |new_value| {
+                let new_value = new_value.clone();
+                let time_scroll = time_scroll.clone();
+                note_cpy
+                    .borrow_mut()
+                    .mutate(Box::new(move |element: &mut Element| {
+                        let width = len as f32 * new_value;
+                        element.dimensions.width = Size::Fixed(width);
+                        let time_scroll = time_scroll.get_copy();
+                        let x = KEYBOARD_WIDTH + (start as f32 - time_scroll) as f32 * new_value;
+                        element.position.x = Coordinate::Fixed(x);
+                    }));
+            }));
+
+        let h_zoom = viewport.h_zoom.clone();
+        note.borrow_mut().on_cleanup.push(Box::new(move || {
+            h_zoom.unsubscribe(sub);
+        }));
+
+        let h_zoom = viewport.h_zoom.clone();
+        let note_cpy = note.clone();
+        let start = n.start;
+        let sub = globals
+            .viewport
+            .time_scroll
+            .subscribe(Box::new(move |new_value| {
+                let new_value = new_value.clone();
+                let h_zoom = h_zoom.clone();
+                note_cpy
+                    .borrow_mut()
+                    .mutate(Box::new(move |element: &mut Element| {
+                        let x =
+                            KEYBOARD_WIDTH + (start as f32 - new_value) as f32 * h_zoom.get_copy();
+                        element.position.x = Coordinate::Fixed(x);
+                    }));
+            }));
+
+        let time_scroll = viewport.time_scroll.clone();
+        note.borrow_mut().on_cleanup.push(Box::new(move || {
+            time_scroll.unsubscribe(sub);
+        }));
+
         children.push(note);
     }
 
-    Element::new(
+
+
+    let y = note_height * note as f32;
+
+    let key_row = Element::new(
         gl,
         p(0., y),
         Size::FractionOfParent(1.),
@@ -172,7 +227,28 @@ fn e_note(
         None,
         needs_rerender.clone(),
         children,
-    )
+    );
+
+    let key_row_cpy = key_row.clone();
+    let sub_id = viewport.v_zoom.subscribe(Box::new(move |new_value| {
+        let new_value = new_value.clone();
+        key_row_cpy
+            .borrow_mut()
+            .mutate(Box::new(move |element: &mut Element| {
+                let note_height = new_value;
+                let y = note_height * note as f32;
+
+                element.position.y = Coordinate::Fixed(y);
+                element.dimensions.height = Size::Fixed(note_height);
+            }));
+    }));
+
+    let v_zoom = viewport.v_zoom.clone();
+    key_row.borrow_mut().on_cleanup.push(Box::new(move || {
+        v_zoom.unsubscribe(sub_id);
+    }));
+
+    key_row
 }
 
 fn is_black_key(note: i32) -> bool {

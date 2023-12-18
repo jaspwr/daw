@@ -8,6 +8,7 @@ pub mod gl;
 pub mod reactive;
 pub mod style;
 pub mod text;
+pub mod input;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Coordinate {
@@ -51,8 +52,8 @@ impl Position {
 
 #[derive(Copy, Clone, Debug)]
 pub struct ComputedPosition {
-    x: f32,
-    y: f32,
+    pub x: f32,
+    pub y: f32,
 }
 
 impl ComputedPosition {

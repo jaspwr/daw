@@ -11,14 +11,17 @@ use super::text::Text;
 use super::*;
 
 pub struct Element {
-    position: Position,
-    dimensions: Dimensions,
-    children: Vec<Element>,
-    text: Option<Text>,
-    style: Style,
+    pub position: Position,
+    pub dimensions: Dimensions,
+    pub children: Vec<Rc<RefCell<Element>>>,
+    pub text: Option<Text>,
+    pub style: Style,
     quad: Quad,
-    needs_rerender: Rc<RefCell<bool>>,
+    pub needs_rerender: Rc<RefCell<bool>>,
+    pub on_cleanup: Vec<Box<dyn Fn()>>,
 }
+
+pub type ElementRef = Rc<RefCell<Element>>;
 
 impl Element {
     pub fn new(
@@ -29,11 +32,11 @@ impl Element {
         style: Option<Style>,
         text: Option<Text>,
         needs_rerender: Rc<RefCell<bool>>,
-        children: Vec<Element>,
-    ) -> Self {
+        children: Vec<Rc<RefCell<Element>>>,
+    ) -> ElementRef {
         needs_rerender.replace(true);
 
-        Self {
+        Rc::new(RefCell::new(Self {
             position,
             dimensions: Dimensions { width, height },
             children,
@@ -44,7 +47,8 @@ impl Element {
             text,
             needs_rerender,
             quad: unsafe { Quad::new(gl) },
-        }
+            on_cleanup: vec![],
+        }))
     }
 
     pub fn render(
@@ -93,18 +97,18 @@ impl Element {
             let text_pos = child_origin
                 + p_c(
                     self.style.padding_left + self.style.padding,
-                    - self.style.padding_top + self.style.padding,
+                    -self.style.padding_top + self.style.padding,
                 );
 
             text.render(gl, text_pos, globals, &dims);
         }
 
         for child in self.children.iter_mut() {
-            child.render(gl, child_origin, globals, &dims);
+            child.borrow_mut().render(gl, child_origin, globals, &dims);
         }
     }
 
-    pub fn mutate(&mut self, func: fn (&mut Self)) {
+    pub fn mutate(&mut self, func: Box<dyn Fn(&mut Self)>) {
         func(self);
         self.needs_rerender.replace(true);
     }
@@ -115,7 +119,11 @@ impl Element {
         }
 
         for child in self.children.iter() {
-            child.cleanup(gl);
+            child.borrow().cleanup(gl);
+        }
+
+        for func in self.on_cleanup.iter() {
+            func();
         }
     }
 }

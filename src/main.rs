@@ -15,6 +15,8 @@ use ui::{
     *,
 };
 
+use crate::event_subscriptions::handle_mouse_button_down;
+
 mod global;
 mod midi;
 mod piano_roll;
@@ -23,6 +25,8 @@ mod top_bar;
 mod track;
 mod ui;
 mod utils;
+mod project;
+mod event_subscriptions;
 
 fn main() {
     unsafe {
@@ -108,7 +112,7 @@ fn main() {
 
         let root = piano_roll::e_piano_roll(
             &gl,
-            &globals,
+            &mut globals,
             &midi,
             0,
             frame.children_need_rerender.clone(),
@@ -141,12 +145,17 @@ fn main() {
 
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
-        let mut top_bar = fb_topbar(&gl, &globals, &screen_dims);
+        let mut top_bar = fb_topbar(&gl, &mut globals, &screen_dims);
 
         let mut style = Style::default();
         style.background_colour.r = 1.;
 
         let mut resize = true;
+
+        let mut control = false;
+        let mut shift = false;
+        let mut lshift = false;
+        let mut rshift = false;
 
         'render: loop {
             for event in events_loop.poll_iter() {
@@ -156,6 +165,8 @@ fn main() {
 
                 println!("{:?}", event);
 
+                handle_mouse_button_down(&mut globals, &event);
+
                 if let sdl2::event::Event::Window {
                     timestamp,
                     window_id,
@@ -163,11 +174,31 @@ fn main() {
                 } = event
                 {
                     if let sdl2::event::WindowEvent::Resized(_, _) = win_event {
-                        println!("Resized");
                         resize = true;
                     }
                 }
+
+                if let sdl2::event::Event::KeyDown {
+                    timestamp,
+                    window_id,
+                    keycode,
+                    scancode,
+                    keymod,
+                    repeat,
+                } = event
+                {
+                    if let Some(keycode) = keycode {
+                        if keycode == sdl2::keyboard::Keycode::Escape {
+                            // let t = globals.loaded_project.tempo.get_copy();
+                            // globals.loaded_project.tempo <<= t + 1.;
+                            // let z = globals.viewport.piano_roll_v_scroll.get_copy();
+                            // globals.viewport.piano_roll_v_scroll <<= z - 1.;
+                        }
+                    }
+                }
+
             }
+
 
             if resize {
                 resize = false;
@@ -209,11 +240,6 @@ fn main() {
 
         gl.delete_program(element_shader);
     }
-}
-
-pub struct Zoom {
-    h_zoom: f32,
-    v_zoom: f32,
 }
 
 const MAIN_VERTEX_SHADER_SOURCE: &str = include_str!("shaders/main_vert.vert");

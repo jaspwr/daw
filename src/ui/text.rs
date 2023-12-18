@@ -13,15 +13,15 @@ use super::{
 };
 
 pub struct Text {
-    text: String,
-    size: f32,
-    font: Rc<Font>,
-    position: Position,
-    colour: Colour,
-    needs_rerender: Rc<RefCell<bool>>,
-    needs_glyphs_rerender: bool,
+    pub text: String,
+    pub size: f32,
+    pub font: Rc<Font>,
+    pub position: Position,
+    pub colour: Colour,
+    pub needs_rerender: Rc<RefCell<bool>>,
+    pub needs_glyphs_rerender: bool,
     texture: Option<NativeTexture>,
-    dims: ComputedDimensions,
+    pub dims: ComputedDimensions,
     quad: Quad,
 }
 

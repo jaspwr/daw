@@ -13,7 +13,7 @@ use glow::*;
 static FRAME_BUF_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub struct FrameBuf {
-    pub root_node: Option<Element>,
+    pub root_node: Option<ElementRef>,
     pub position: Position,
     pub dimensions: Dimensions,
     fbo: NativeFramebuffer,
@@ -27,7 +27,7 @@ pub struct FrameBuf {
 impl FrameBuf {
     pub fn new(
         gl: &Context,
-        root_node: Option<Element>,
+        root_node: Option<ElementRef>,
         pos: Position,
         dims: Dimensions,
         parent_dims: ComputedDimensions,
@@ -156,6 +156,8 @@ impl FrameBuf {
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
+        println!("rendering children of framebuf");
+
         let dims = compute_dims(&self.dimensions, parent_dims);
 
         if dims != self.last_size {
@@ -178,7 +180,7 @@ impl FrameBuf {
             let origin = ComputedPosition::origin();
 
             if let Some(root_node) = &mut self.root_node {
-                root_node.render(gl, origin, globals, &dims);
+                root_node.borrow_mut().render(gl, origin, globals, &dims);
             }
 
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);

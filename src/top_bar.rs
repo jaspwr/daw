@@ -3,17 +3,13 @@ use std::{cell::RefCell, rc::Rc};
 use crate::{
     global::Globals,
     ui::{
-        element::Element, frame_buf::FrameBuf, p, style::Style, text::Text, ComputedDimensions,
-        Coordinate, Dimensions, Position, Size,
+        element::Element, frame_buf::FrameBuf, input::e_f32_field, p, style::Style, text::Text,
+        ComputedDimensions, Coordinate, Dimensions, Position, Size, d,
     },
 };
 use glow::*;
 
-pub fn fb_topbar(
-    gl: &Context,
-    globals: &Globals,
-    parent_dims: &ComputedDimensions,
-) -> FrameBuf {
+pub fn fb_topbar(gl: &Context, globals: &mut Globals, parent_dims: &ComputedDimensions) -> FrameBuf {
     let pos = Position {
         x: Coordinate::Fixed(0.),
         y: Coordinate::FractionOfParentWithOffset(1., -globals.top_bar_size),
@@ -41,7 +37,18 @@ pub fn fb_topbar(
         needs_rerender.clone(),
     );
 
-    let mut container = Element::new(
+    let mut tempo_ref = globals.loaded_project.tempo.clone();
+
+    let tempo = e_f32_field(
+        gl,
+        globals,
+        p(0., 0.),
+        d(40., 100.),
+        tempo_ref,
+        needs_rerender.clone(),
+    );
+
+    let container = Element::new(
         gl,
         Position::origin(),
         Size::FractionOfParent(1.),
@@ -49,7 +56,7 @@ pub fn fb_topbar(
         Some(container_style),
         Some(label),
         needs_rerender.clone(),
-        vec![],
+        vec![tempo],
     );
 
     frame_buf.root_node = Some(container);

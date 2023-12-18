@@ -19,6 +19,7 @@ pub struct Element {
     quad: Quad,
     pub needs_rerender: Rc<RefCell<bool>>,
     pub on_cleanup: Vec<Box<dyn Fn()>>,
+    pub on_render: Vec<Box<dyn Fn()>>,
 }
 
 pub type ElementRef = Rc<RefCell<Element>>;
@@ -48,6 +49,7 @@ impl Element {
             needs_rerender,
             quad: unsafe { Quad::new(gl) },
             on_cleanup: vec![],
+            on_render: vec![],
         }))
     }
 
@@ -58,6 +60,10 @@ impl Element {
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
+        for func in self.on_render.iter() {
+            func();
+        }
+
         if !self.style.visible {
             return;
         }

@@ -27,6 +27,7 @@ mod ui;
 mod utils;
 mod project;
 mod event_subscriptions;
+mod v_scroll_container;
 
 fn main() {
     unsafe {
@@ -196,9 +197,7 @@ fn main() {
                         }
                     }
                 }
-
             }
-
 
             if resize {
                 resize = false;
@@ -237,6 +236,7 @@ fn main() {
 
         // root.cleanup(&gl);
         frame.cleanup(&gl);
+        top_bar.cleanup(&gl);
 
         gl.delete_program(element_shader);
     }

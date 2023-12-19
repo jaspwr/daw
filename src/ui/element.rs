@@ -6,6 +6,7 @@ use glow::*;
 use crate::global::Globals;
 
 use super::gl::{create_quad, Quad};
+use super::reactive::Reactive;
 use super::style::*;
 use super::text::Text;
 use super::*;
@@ -13,7 +14,7 @@ use super::*;
 pub struct Element {
     pub position: Position,
     pub dimensions: Dimensions,
-    pub children: Vec<Rc<RefCell<Element>>>,
+    pub children: Vec<ElementRef>,
     pub text: Option<Text>,
     pub style: Style,
     quad: Quad,
@@ -22,7 +23,85 @@ pub struct Element {
     pub on_render: Vec<Box<dyn Fn()>>,
 }
 
-pub type ElementRef = Rc<RefCell<Element>>;
+// pub type ElementRef = Rc<RefCell<Element>>;
+
+pub struct ElementRef {
+    pub ptr: *mut Element,
+    ref_count: *mut usize,
+}
+
+impl ElementRef {
+    pub fn new(element: Element) -> Self {
+        let ptr = Box::into_raw(Box::new(element));
+        let ref_count = Box::into_raw(Box::new(1));
+
+        Self { ptr, ref_count }
+    }
+
+    pub fn borrow<'a>(&'a self) -> &'a Element {
+        unsafe { &*self.ptr }
+    }
+
+    // pub fn borrow_mut<'a>(&'a mut self) -> &'a mut Element {
+    //     unsafe { &mut *self.ptr }
+    // }
+
+    pub fn render(
+        &self,
+        gl: &glow::Context,
+        origin: ComputedPosition,
+        globals: &Globals,
+        parent_dims: &ComputedDimensions,
+    ) {
+        unsafe {
+            (*self.ptr).render(gl, origin, globals, parent_dims);
+        }
+    }
+
+    pub fn mutate(&self, func: Box<dyn Fn(&mut Element)>) {
+        unsafe {
+            (*self.ptr).mutate(func);
+        }
+    }
+
+    pub fn add_cleanup_callback(&self, func: Box<dyn Fn()>) {
+        unsafe {
+            (*self.ptr).on_cleanup.push(func);
+        }
+    }
+
+    pub fn cleanup(&self, gl: &glow::Context) {
+        unsafe {
+            (*self.ptr).cleanup(gl);
+        }
+    }
+}
+
+impl Clone for ElementRef {
+    fn clone(&self) -> Self {
+        unsafe {
+            *self.ref_count += 1;
+        }
+
+        Self {
+            ptr: self.ptr,
+            ref_count: self.ref_count,
+        }
+    }
+}
+
+impl Drop for ElementRef {
+    fn drop(&mut self) {
+        unsafe {
+            *self.ref_count -= 1;
+
+            if *self.ref_count == 0 {
+                drop(Box::from_raw(self.ptr));
+                drop(Box::from_raw(self.ref_count));
+            }
+        }
+    }
+}
 
 impl Element {
     pub fn new(
@@ -33,11 +112,11 @@ impl Element {
         style: Option<Style>,
         text: Option<Text>,
         needs_rerender: Rc<RefCell<bool>>,
-        children: Vec<Rc<RefCell<Element>>>,
+        children: Vec<ElementRef>,
     ) -> ElementRef {
         needs_rerender.replace(true);
 
-        Rc::new(RefCell::new(Self {
+        ElementRef::new(Self {
             position,
             dimensions: Dimensions { width, height },
             children,
@@ -50,7 +129,7 @@ impl Element {
             quad: unsafe { Quad::new(gl) },
             on_cleanup: vec![],
             on_render: vec![],
-        }))
+        })
     }
 
     pub fn render(
@@ -110,7 +189,7 @@ impl Element {
         }
 
         for child in self.children.iter_mut() {
-            child.borrow_mut().render(gl, child_origin, globals, &dims);
+            child.render(gl, child_origin, globals, &dims);
         }
     }
 
@@ -132,4 +211,57 @@ impl Element {
             func();
         }
     }
+
+    pub fn subscribe_mutation_to_reactive<T>(
+        element: &ElementRef,
+        reactive: &Reactive<T>,
+        callback: Box<dyn Fn(&mut Element, &T)>,
+    ) where
+        T: Clone + 'static,
+    {
+        let mut element = element.clone();
+
+        let id = {
+            let element = element.clone();
+            let callback = Rc::new(callback);
+            reactive.subscribe(Box::new(move |new_value| {
+                let new_value = new_value.clone();
+                let callback = callback.clone();
+                element.mutate(Box::new(move |element: &mut Element| {
+                    callback(element, &new_value);
+                }));
+            }))
+        };
+
+        let reactive = reactive.clone();
+        element.add_cleanup_callback(Box::new(move || {
+            reactive.unsubscribe(id);
+        }));
+    }
+
+    // pub fn subscribe_recreate_to_reactive<T>(
+    //     element: &ElementRef,
+    //     reactive: &Reactive<T>,
+    //     create: Box<dyn Fn(&T) -> ElementRef>,
+    // ) where
+    //     T: Clone + 'static,
+    // {
+    //     let element = element.clone();
+
+    //     let id = {
+    //         let element = element.clone();
+    //         let callback = Rc::new(create);
+    //         reactive.subscribe(Box::new(move |new_value| {
+    //             let new_value = new_value.clone();
+    //             let callback = callback.clone();
+    //             let new_element = callback(&new_value);
+    //             element.replace(new_element.borrow().clone());
+    //         }))
+    //     };
+
+    //     let reactive = reactive.clone();
+    //     element.borrow_mut().on_cleanup.push(Box::new(move || {
+    //         reactive.unsubscribe(id);
+    //     }));
+    // }
 }

@@ -114,7 +114,6 @@ fn main() {
         let root = piano_roll::e_piano_roll(
             &gl,
             &mut globals,
-            &midi,
             0,
             frame.children_need_rerender.clone(),
         );
@@ -190,6 +189,9 @@ fn main() {
                 {
                     if let Some(keycode) = keycode {
                         if keycode == sdl2::keyboard::Keycode::Escape {
+
+                            globals.loaded_project.tempo += 1.;
+
                             // let t = globals.loaded_project.tempo.get_copy();
                             // globals.loaded_project.tempo <<= t + 1.;
                             // let z = globals.viewport.piano_roll_v_scroll.get_copy();

@@ -180,7 +180,7 @@ impl FrameBuf {
             let origin = ComputedPosition::origin();
 
             if let Some(root_node) = &mut self.root_node {
-                root_node.borrow_mut().render(gl, origin, globals, &dims);
+                root_node.render(gl, origin, globals, &dims);
             }
 
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);

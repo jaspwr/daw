@@ -1,5 +1,5 @@
 pub fn note_name(note: u8, show_octave: bool) -> String {
-    let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G#", "A", "A#", "B", "C"];
+    let note_names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
 
     let octave = note / 12;
     let note = note % 12;

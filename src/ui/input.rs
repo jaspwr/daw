@@ -1,10 +1,16 @@
-use std::{cell::RefCell, rc::Rc, default};
+use std::{cell::RefCell, default, rc::Rc};
 
 use crate::global::Globals;
 
-use super::{Size, Position, Dimensions, element::{Element, ElementRef}, style::Style, text::Text, reactive::Reactive};
+use super::{
+    element::{Element, ElementRef},
+    reactive::Reactive,
+    style::Style,
+    text::Text,
+    Dimensions, Position, Size,
+};
 
-pub fn e_f32_field (
+pub fn e_f32_field(
     gl: &glow::Context,
     globals: &Globals,
     pos: Position,
@@ -40,20 +46,16 @@ pub fn e_f32_field (
         vec![],
     );
 
-    let container_cpy = container.clone();
-    let sub_id = value.subscribe(Box::new(move |new_value| {
-        let new_value = new_value.clone();
-        container_cpy.borrow_mut().mutate(Box::new(move |element: &mut Element| {
+    Element::subscribe_mutation_to_reactive(
+        &container,
+        &value,
+        Box::new(move |element: &mut Element, new_value: &f32| {
             if let Some(text) = &mut element.text {
                 text.text = new_value.to_string();
                 text.needs_glyphs_rerender = true;
             }
-        }));
-    }));
-
-    container.borrow_mut().on_cleanup.push(Box::new(move || {
-        value.unsubscribe(sub_id);
-    }));
+        }),
+    );
 
     container
 }

@@ -46,8 +46,7 @@ pub fn e_f32_field(
         vec![],
     );
 
-    Element::subscribe_mutation_to_reactive(
-        &container,
+    container.subscribe_mutation_to_reactive(
         &value,
         Box::new(move |element: &mut Element, new_value: &f32| {
             if let Some(text) = &mut element.text {

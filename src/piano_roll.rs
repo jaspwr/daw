@@ -178,8 +178,7 @@ fn e_note(
         let len = n.length;
         let start = n.start;
         let time_scroll = viewport.time_scroll.clone();
-        Element::subscribe_mutation_to_reactive(
-            &note,
+        note.subscribe_mutation_to_reactive(
             &globals.viewport.h_zoom,
             Box::new(move |element: &mut Element, new_value: &f32| {
                 let width = len as f32 * new_value;
@@ -228,8 +227,7 @@ fn e_note(
         children,
     );
 
-    Element::subscribe_mutation_to_reactive(
-        &key_row,
+    key_row.subscribe_mutation_to_reactive(
         &globals.viewport.v_zoom,
         Box::new(move |element: &mut Element, v_zoom: &f32| {
             let note_height = v_zoom;

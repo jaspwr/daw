@@ -75,6 +75,60 @@ impl ElementRef {
             (*self.ptr).cleanup(gl);
         }
     }
+
+    pub fn subscribe_mutation_to_reactive<T>(
+        &self,
+        reactive: &Reactive<T>,
+        callback: Box<dyn Fn(&mut Element, &T)>,
+    ) where
+        T: Clone + 'static,
+    {
+        let mut element = self.clone();
+
+        let id = {
+            let element = element.clone();
+            let callback = Rc::new(callback);
+            reactive.subscribe(Box::new(move |new_value| {
+                let new_value = new_value.clone();
+                let callback = callback.clone();
+                element.mutate(Box::new(move |element: &mut Element| {
+                    callback(element, &new_value);
+                }));
+            }))
+        };
+
+        let reactive = reactive.clone();
+        element.add_cleanup_callback(Box::new(move || {
+            reactive.unsubscribe(id);
+        }));
+    }
+
+    // pub fn subscribe_recreate_to_reactive<T>(
+    //     &self,
+    //     reactive: &Reactive<T>,
+    //     create: Box<dyn Fn(&T) -> ElementRef>,
+    // ) where
+    //     T: Clone + 'static,
+    // {
+    //     let element = element.clone();
+
+    //     let id = {
+    //         let element = element.clone();
+    //         let callback = Rc::new(create);
+    //         reactive.subscribe(Box::new(move |new_value| {
+    //             let new_value = new_value.clone();
+    //             let callback = callback.clone();
+    //             let new_element = callback(&new_value);
+    //             element.replace(new_element.borrow().clone());
+    //         }))
+    //     };
+
+    //     let reactive = reactive.clone();
+    //     element.borrow_mut().on_cleanup.push(Box::new(move || {
+    //         reactive.unsubscribe(id);
+    //     }));
+    // }
+
 }
 
 impl Clone for ElementRef {
@@ -211,57 +265,4 @@ impl Element {
             func();
         }
     }
-
-    pub fn subscribe_mutation_to_reactive<T>(
-        element: &ElementRef,
-        reactive: &Reactive<T>,
-        callback: Box<dyn Fn(&mut Element, &T)>,
-    ) where
-        T: Clone + 'static,
-    {
-        let mut element = element.clone();
-
-        let id = {
-            let element = element.clone();
-            let callback = Rc::new(callback);
-            reactive.subscribe(Box::new(move |new_value| {
-                let new_value = new_value.clone();
-                let callback = callback.clone();
-                element.mutate(Box::new(move |element: &mut Element| {
-                    callback(element, &new_value);
-                }));
-            }))
-        };
-
-        let reactive = reactive.clone();
-        element.add_cleanup_callback(Box::new(move || {
-            reactive.unsubscribe(id);
-        }));
-    }
-
-    // pub fn subscribe_recreate_to_reactive<T>(
-    //     element: &ElementRef,
-    //     reactive: &Reactive<T>,
-    //     create: Box<dyn Fn(&T) -> ElementRef>,
-    // ) where
-    //     T: Clone + 'static,
-    // {
-    //     let element = element.clone();
-
-    //     let id = {
-    //         let element = element.clone();
-    //         let callback = Rc::new(create);
-    //         reactive.subscribe(Box::new(move |new_value| {
-    //             let new_value = new_value.clone();
-    //             let callback = callback.clone();
-    //             let new_element = callback(&new_value);
-    //             element.replace(new_element.borrow().clone());
-    //         }))
-    //     };
-
-    //     let reactive = reactive.clone();
-    //     element.borrow_mut().on_cleanup.push(Box::new(move || {
-    //         reactive.unsubscribe(id);
-    //     }));
-    // }
 }

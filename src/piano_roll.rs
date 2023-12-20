@@ -7,17 +7,18 @@ use crate::{
     midi::*,
     selection::{NoteRef, Selection},
     track::{TrackData, TrackId},
-    ui::element::*,
     ui::*,
+    ui::{element::*, scroll_window::e_scroll_window},
     ui::{style::*, text::Text},
     utils::note_name,
 };
 
 pub fn e_piano_roll(
     gl: &glow::Context,
-    globals: &Globals,
+    globals: &mut Globals,
     track_id: TrackId,
     needs_rerender: Rc<RefCell<bool>>,
+    frame_bounding_box: BoundingBoxRef,
 ) -> ElementRef {
     globals.viewport.h_zoom.set(2.);
     globals.viewport.v_zoom.set(12.);
@@ -59,7 +60,7 @@ pub fn e_piano_roll(
         }
     }
 
-    Element::new(
+    let roll = Element::new(
         gl,
         Position::origin(),
         Size::FractionOfParent(1.),
@@ -67,6 +68,7 @@ pub fn e_piano_roll(
         Some(style),
         None,
         needs_rerender.clone(),
+        frame_bounding_box.clone(),
         (0..=127)
             .map(|n| {
                 e_note(
@@ -76,10 +78,23 @@ pub fn e_piano_roll(
                     globals,
                     &notes[n as usize],
                     needs_rerender.clone(),
+                    frame_bounding_box.clone(),
                 )
             })
             .collect(),
-    )
+    );
+
+    let scroll_win = e_scroll_window(
+        gl,
+        globals,
+        needs_rerender.clone(),
+        frame_bounding_box.clone(),
+        true,
+        false,
+        vec![roll],
+    );
+
+    return scroll_win;
 }
 
 fn e_note(
@@ -89,6 +104,7 @@ fn e_note(
     globals: &Globals,
     notes: &Vec<(&Note, bool)>,
     needs_rerender: Rc<RefCell<bool>>,
+    frame_bounding_box: BoundingBoxRef,
 ) -> ElementRef {
     let mut row_style = Style::default();
     row_style.border_width = 1.;
@@ -141,6 +157,7 @@ fn e_note(
         Some(key_style),
         Some(label),
         needs_rerender.clone(),
+        frame_bounding_box.clone(),
         vec![],
     );
 
@@ -164,7 +181,7 @@ fn e_note(
 
         let x = KEYBOARD_WIDTH + (n.start as f32 - time_scroll) as f32 * h_zoom;
 
-        let mut note = Element::new(
+        let note = Element::new(
             gl,
             p(x, 0.),
             Size::Fixed(width),
@@ -172,6 +189,7 @@ fn e_note(
             Some(note_style),
             None,
             needs_rerender.clone(),
+            frame_bounding_box.clone(),
             vec![],
         );
 
@@ -198,12 +216,10 @@ fn e_note(
             .subscribe(Box::new(move |new_value| {
                 let new_value = new_value.clone();
                 let h_zoom = h_zoom.clone();
-                note_cpy
-                    .mutate(Box::new(move |element: &mut Element| {
-                        let x =
-                            KEYBOARD_WIDTH + (start as f32 - new_value) as f32 * h_zoom.get_copy();
-                        element.position.x = Coordinate::Fixed(x);
-                    }));
+                note_cpy.mutate(Box::new(move |element: &mut Element| {
+                    let x = KEYBOARD_WIDTH + (start as f32 - new_value) as f32 * h_zoom.get_copy();
+                    element.position.x = Coordinate::Fixed(x);
+                }));
             }));
 
         let time_scroll = viewport.time_scroll.clone();
@@ -224,6 +240,7 @@ fn e_note(
         Some(row_style),
         None,
         needs_rerender.clone(),
+        frame_bounding_box,
         children,
     );
 

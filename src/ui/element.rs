@@ -14,8 +14,10 @@ use super::*;
 pub struct Element {
     pub position: Position,
     pub dimensions: Dimensions,
+    pub bounding_box: BoundingBoxRef,
+    pub frame_bounding_box: BoundingBoxRef,
     pub children: Vec<ElementRef>,
-    pub text: Option<Text>,
+    pub text_node: Option<Text>,
     pub style: Style,
     quad: Quad,
     pub needs_rerender: Rc<RefCell<bool>>,
@@ -128,7 +130,6 @@ impl ElementRef {
     //         reactive.unsubscribe(id);
     //     }));
     // }
-
 }
 
 impl Clone for ElementRef {
@@ -166,6 +167,7 @@ impl Element {
         style: Option<Style>,
         text: Option<Text>,
         needs_rerender: Rc<RefCell<bool>>,
+        frame_bounding_box: BoundingBoxRef,
         children: Vec<ElementRef>,
     ) -> ElementRef {
         needs_rerender.replace(true);
@@ -178,11 +180,13 @@ impl Element {
                 Some(style) => style,
                 None => Style::default(),
             },
-            text,
+            text_node: text,
             needs_rerender,
             quad: unsafe { Quad::new(gl) },
             on_cleanup: vec![],
             on_render: vec![],
+            frame_bounding_box,
+            bounding_box: Rc::new(RefCell::new(None)),
         })
     }
 
@@ -206,7 +210,19 @@ impl Element {
             height: self.dimensions.height.to_size(parent_dims.height),
         };
 
-        let comped_pos = self.position.compute(parent_dims);
+        let pos = origin + self.position.compute(parent_dims);
+
+        // Update computed bounding box
+        {
+            let mut bounding_box = self.bounding_box.borrow_mut();
+            let frame_bouding_box = self.frame_bounding_box.borrow();
+            if let Some(frame_bb) = frame_bouding_box.as_ref() {
+                *bounding_box = Some(ComputedBoundingBox {
+                    top_left: pos + frame_bb.top_left,
+                    bottom_right: pos + dims + frame_bb.top_left,
+                });
+            }
+        }
 
         if self.style.render_self {
             unsafe {
@@ -219,7 +235,6 @@ impl Element {
 
                 gl.bind_vertex_array(Some(self.quad.vao));
 
-                let pos = origin + comped_pos;
                 create_quad(gl, &self.quad.vbo, pos, &dims);
 
                 self.style.set(gl, globals);
@@ -230,10 +245,8 @@ impl Element {
             }
         }
 
-        let child_origin = origin + comped_pos;
-
-        if let Some(text) = &mut self.text {
-            let text_pos = child_origin
+        if let Some(text) = &mut self.text_node {
+            let text_pos = pos
                 + p_c(
                     self.style.padding_left + self.style.padding,
                     -self.style.padding_top + self.style.padding,
@@ -243,7 +256,7 @@ impl Element {
         }
 
         for child in self.children.iter_mut() {
-            child.render(gl, child_origin, globals, &dims);
+            child.render(gl, pos, globals, &dims);
         }
     }
 

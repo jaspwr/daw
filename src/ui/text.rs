@@ -56,15 +56,15 @@ impl Text {
             height: 512. as f32,
         };
 
-        ret.recreate_texture(gl);
 
         ret.dims = dims;
+        ret.recreate_texture(gl);
 
         ret
     }
 
     pub fn rerender_glyphs(&mut self, gl: &glow::Context) {
-        self.recreate_texture(gl);
+        // self.recreate_texture(gl);
         let glyphs = self.font.as_ref().layout(self.text.as_str(), self.size);
 
         for glyph in glyphs {
@@ -97,7 +97,7 @@ impl Text {
         }
     }
 
-    pub fn mutate(&mut self, func: fn(&mut Text)) {
+    pub fn mutate(&mut self, func: Box<dyn Fn(&mut Text)>) {
         func(self);
         self.needs_glyphs_rerender = true;
         self.needs_rerender.replace(true);

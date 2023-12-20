@@ -1,4 +1,4 @@
-use std::{ops::{Add, AddAssign}, cell::RefCell};
+use std::{ops::{Add, AddAssign}, cell::RefCell, rc::Rc};
 
 use crate::global::Globals;
 
@@ -9,6 +9,7 @@ pub mod reactive;
 pub mod style;
 pub mod text;
 pub mod input;
+pub mod scroll_window;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Coordinate {
@@ -80,6 +81,24 @@ impl AddAssign for ComputedPosition {
     }
 }
 
+impl Add<ComputedDimensions> for ComputedPosition {
+    type Output = Self;
+
+    fn add(self, rhs: ComputedDimensions) -> Self {
+        ComputedPosition {
+            x: self.x + rhs.width,
+            y: self.y + rhs.height,
+        }
+    }
+}
+
+impl AddAssign<ComputedDimensions> for ComputedPosition {
+    fn add_assign(&mut self, rhs: ComputedDimensions) {
+        self.x += rhs.width;
+        self.y += rhs.height;
+    }
+}
+
 pub fn p(x: f32, y: f32) -> Position {
     Position {
         x: Coordinate::Fixed(x),
@@ -130,4 +149,32 @@ pub fn d(width: f32, height: f32) -> Dimensions {
         width: Size::Fixed(width),
         height: Size::Fixed(height),
     }
+}
+
+#[derive(Debug)]
+pub struct ComputedBoundingBox {
+    pub top_left: ComputedPosition,
+    pub bottom_right: ComputedPosition,
+}
+
+pub type BoundingBoxRef = Rc<RefCell<Option<ComputedBoundingBox>>>;
+
+impl ComputedBoundingBox {
+    pub fn contains(&self, pos: ComputedPosition) -> bool {
+        pos.x >= self.top_left.x
+            && pos.x <= self.bottom_right.x
+            && pos.y >= self.top_left.y
+            && pos.y <= self.bottom_right.y
+    }
+}
+
+pub fn bounding_box_ref_contains(
+    bounding_box: &BoundingBoxRef,
+    pos: ComputedPosition,
+) -> bool {
+    bounding_box
+        .borrow()
+        .as_ref()
+        .map(|bb| bb.contains(pos))
+        .unwrap_or(false)
 }

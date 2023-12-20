@@ -6,11 +6,9 @@ use super::{
     compute_dims,
     element::*,
     gl::{create_quad, render_textured_quad, RENDER_MODE_SOLID, RENDER_MODE_TEXTURE, Quad},
-    p, ComputedDimensions, Dimensions, Position, ComputedPosition,
+    p, ComputedDimensions, Dimensions, Position, ComputedPosition, BoundingBoxRef, ComputedBoundingBox, reactive::Reactive,
 };
 use glow::*;
-
-static FRAME_BUF_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub struct FrameBuf {
     pub root_node: Option<ElementRef>,
@@ -21,7 +19,9 @@ pub struct FrameBuf {
     texture: Option<NativeTexture>,
     quad: Quad,
     last_size: ComputedDimensions,
+    pub bounding_box: BoundingBoxRef,
     pub children_need_rerender: Rc<RefCell<bool>>,
+    pub on_cleanup: Vec<Box<dyn Fn()>>,
 }
 
 impl FrameBuf {
@@ -32,8 +32,6 @@ impl FrameBuf {
         dims: Dimensions,
         parent_dims: ComputedDimensions,
     ) -> Self {
-        let id = FRAME_BUF_COUNT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-
         let comped_dims = compute_dims(&dims, &parent_dims);
 
         unsafe {
@@ -73,8 +71,10 @@ impl FrameBuf {
                 // rbo,
                 texture: None,
                 quad: Quad::new(gl),
+                bounding_box: Rc::new(RefCell::new(None)),
                 children_need_rerender: Rc::new(RefCell::new(false)),
                 last_size: comped_dims,
+                on_cleanup: vec![],
             };
 
             ret.replace_texture(gl, comped_dims);
@@ -138,13 +138,24 @@ impl FrameBuf {
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
+
+        let dims = compute_dims(&self.dimensions, parent_dims);
+        let pos = origin + self.position.compute(parent_dims);
+
+        // Update bounding box
+        {
+            let mut bb = self.bounding_box.borrow_mut();
+            *bb = Some(ComputedBoundingBox {
+                top_left: pos,
+                bottom_right: pos + dims,
+            });
+        }
+
         if *self.children_need_rerender.borrow() {
             self.children_need_rerender.replace(false);
             self.render_children(gl, globals, parent_dims);
         }
 
-        let dims = compute_dims(&self.dimensions, parent_dims);
-        let pos = origin + self.position.compute(parent_dims);
         unsafe {
             render_textured_quad(gl, globals, &self.quad, &self.texture, pos, &dims);
         }
@@ -200,6 +211,10 @@ impl FrameBuf {
     }
 
     pub fn cleanup(&self, gl: &Context) {
+        for f in &self.on_cleanup {
+            f();
+        }
+
         unsafe {
             gl.delete_framebuffer(self.fbo);
             self.quad.cleanup(gl);

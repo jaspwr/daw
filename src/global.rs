@@ -6,7 +6,7 @@ use glow::*;
 use crate::event_subscriptions::Subscriptions;
 use crate::project::Project;
 use crate::selection::Selection;
-use crate::ui::gl::*;
+use crate::ui::{gl::*, ComputedPosition};
 use crate::ui::reactive::Reactive;
 use crate::ui::style::*;
 use crate::ui::text::Font;
@@ -16,6 +16,7 @@ pub struct Globals {
     pub loaded_project: Project,
     pub selection: Selection,
     pub viewport: Viewport,
+    pub keyboard_grabbed: bool,
     pub subscriptions: Subscriptions,
     pub element_uniform_locations: HashMap<&'static str, UniformLocation>,
     pub texture_uniform_locations: HashMap<&'static str, UniformLocation>,
@@ -25,6 +26,7 @@ pub struct Globals {
     pub screen_dims: ComputedDimensions,
     pub main_font: Rc<Font>,
     pub top_bar_size: f32,
+    pub mouse_pos: ComputedPosition,
 }
 
 impl Globals {
@@ -64,6 +66,7 @@ impl Globals {
             selection: Selection::default(),
             element_uniform_locations,
             texture_uniform_locations,
+            keyboard_grabbed: false,
             colour_palette: ColourPalette::default(),
             element_shader,
             texture_shader,
@@ -73,6 +76,7 @@ impl Globals {
             loaded_project: Project::new(),
             subscriptions: Subscriptions::new(),
             viewport: Viewport::default(),
+            mouse_pos: ComputedPosition::origin(),
         }
     }
 }

@@ -1,12 +1,11 @@
-use std::{cell::RefCell, rc::Rc, ops::{ShlAssign, AddAssign, SubAssign}};
+use std::{cell::RefCell, rc::Rc, ops::{ShlAssign, AddAssign, SubAssign, Add, Sub, Mul, Div}};
 
 use sdl2::libc::PACKET_ADD_MEMBERSHIP;
+use serde::Serializer;
 
 static ID_COUNTER: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 pub struct Reactive<T>
-where
-    T: Clone,
 {
     ref_count: *mut usize,
     value: Rc<RefCell<T>>,
@@ -16,7 +15,7 @@ where
 
 impl<T> Default for Reactive<T>
 where
-    T: Default + Clone,
+    T: Default,
 {
     fn default() -> Self {
         Self::new(T::default())
@@ -31,8 +30,6 @@ struct ReactiveSubscription<T> {
 }
 
 impl<T> Clone for Reactive<T>
-where
-    T: Clone,
 {
     fn clone(&self) -> Self {
         unsafe {
@@ -49,8 +46,6 @@ where
 }
 
 impl<T> Reactive<T>
-where
-    T: Clone,
 {
     pub fn new(value: T) -> Self {
         Self {
@@ -63,10 +58,6 @@ where
 
     pub fn get(&self) -> Rc<RefCell<T>> {
         self.value.clone()
-    }
-
-    pub fn get_copy(&self) -> T {
-        self.value.borrow().clone()
     }
 
     pub fn set(&self, value: T) {
@@ -104,7 +95,7 @@ where
             .retain(|dependant| dependant.id != id);
     }
 
-    pub fn mutate(&mut self, callback: Box<dyn Fn(&mut T)>) {
+    pub fn mutate(&self, callback: Box<dyn Fn(&mut T)>) {
         callback(&mut self.value.borrow_mut());
         for dependant in self.dependants.borrow().iter() {
             (dependant.callback)(&self.value.borrow());
@@ -118,6 +109,15 @@ where
     }
 }
 
+impl<T> Reactive<T>
+where
+    T: Clone,
+{
+    pub fn get_copy(&self) -> T {
+        self.value.borrow().clone()
+    }
+}
+
 impl<T> ShlAssign<T> for Reactive<T>
 where
     T: Clone,
@@ -128,8 +128,6 @@ where
 }
 
 impl<T> Drop for Reactive<T>
-where
-    T: Clone,
 {
     fn drop(&mut self) {
         unsafe {
@@ -166,3 +164,102 @@ where
     }
 }
 
+impl<T> PartialEq for Reactive<T>
+where
+    T: PartialEq + Clone,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.value.borrow().eq(&other.value.borrow())
+    }
+}
+
+impl<T> Eq for Reactive<T> where T: PartialEq + Clone {}
+
+
+impl<T> Add<T> for Reactive<T>
+where
+    T: Clone + std::ops::Add<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn add(self, rhs: T) -> Self::Output {
+        self.get_copy() + rhs
+    }
+}
+
+impl<T> Add<T> for &Reactive<T>
+where
+    T: Clone + std::ops::Add<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn add(self, rhs: T) -> Self::Output {
+        self.get_copy() + rhs
+    }
+}
+
+impl<T> Sub<T> for Reactive<T>
+where
+    T: Clone + std::ops::Sub<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        self.get_copy() - rhs
+    }
+}
+
+impl<T> Sub<T> for &Reactive<T>
+where
+    T: Clone + std::ops::Sub<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        self.get_copy() - rhs
+    }
+}
+
+impl<T> Mul<T> for Reactive<T>
+where
+    T: Clone + std::ops::Mul<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self.get_copy() * rhs
+    }
+}
+
+impl<T> Mul<T> for &Reactive<T>
+where
+    T: Clone + std::ops::Mul<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn mul(self, rhs: T) -> Self::Output {
+        self.get_copy() * rhs
+    }
+}
+
+impl<T> Div<T> for Reactive<T>
+where
+    T: Clone + std::ops::Div<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn div(self, rhs: T) -> Self::Output {
+        self.get_copy() / rhs
+    }
+}
+
+impl<T> Div<T> for &Reactive<T>
+where
+    T: Clone + std::ops::Div<Output = T> + 'static,
+{
+    type Output = T;
+
+    fn div(self, rhs: T) -> Self::Output {
+        self.get_copy() / rhs
+    }
+}

@@ -6,6 +6,7 @@ pub mod element;
 pub mod frame_buf;
 pub mod gl;
 pub mod reactive;
+pub mod reactive_list;
 pub mod style;
 pub mod text;
 pub mod input;
@@ -151,7 +152,7 @@ pub fn d(width: f32, height: f32) -> Dimensions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ComputedBoundingBox {
     pub top_left: ComputedPosition,
     pub bottom_right: ComputedPosition,
@@ -165,6 +166,22 @@ impl ComputedBoundingBox {
             && pos.x <= self.bottom_right.x
             && pos.y >= self.top_left.y
             && pos.y <= self.bottom_right.y
+    }
+
+    pub fn dimensions(&self) -> ComputedDimensions {
+        ComputedDimensions {
+            width: (self.bottom_right.x - self.top_left.x).abs(),
+            height: (self.bottom_right.y - self.top_left.y).abs(),
+        }
+    }
+}
+
+impl Default for ComputedBoundingBox {
+    fn default() -> Self {
+        Self {
+            top_left: ComputedPosition::origin(),
+            bottom_right: ComputedPosition::origin(),
+        }
     }
 }
 

@@ -65,7 +65,7 @@ impl TrackData {
 }
 
 pub struct TrackGroup {
-    pub tracks: HashMap<TrackId, Reactive<Track>>,
+    pub tracks: HashMap<TrackId, Track>,
 }
 
 impl TrackGroup {
@@ -76,7 +76,7 @@ impl TrackGroup {
     }
 
     pub fn append(&mut self, track: Track) {
-        self.tracks.insert(track.uid, Reactive::new(track));
+        self.tracks.insert(track.uid, track);
     }
 
     pub fn add_new(&mut self, type_: TrackType) {
@@ -89,7 +89,7 @@ impl TrackGroup {
 }
 
 impl Index<TrackId> for TrackGroup {
-    type Output = Reactive<Track>;
+    type Output = Track;
 
     fn index<'a>(&'a self, index: TrackId) -> &'a Self::Output {
         self.tracks.get(&index).unwrap()

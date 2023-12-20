@@ -24,9 +24,9 @@ where
 
 pub type ReactiveSubscriptionId = usize;
 
-struct ReactiveSubscription<T> {
-    id: ReactiveSubscriptionId,
-    callback: Box<dyn Fn(&T)>,
+pub struct ReactiveSubscription<T> {
+    pub id: ReactiveSubscriptionId,
+    pub callback: Box<dyn Fn(&T)>,
 }
 
 impl<T> Clone for Reactive<T>

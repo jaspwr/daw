@@ -26,6 +26,7 @@ pub struct Globals {
     pub screen_dims: ComputedDimensions,
     pub main_font: Rc<Font>,
     pub top_bar_size: f32,
+    pub piano_roll_keyboard_width: f32,
     pub mouse_pos: ComputedPosition,
 }
 
@@ -73,6 +74,7 @@ impl Globals {
             screen_dims,
             main_font,
             top_bar_size: 25.,
+            piano_roll_keyboard_width: 150.,
             loaded_project: Project::new(),
             subscriptions: Subscriptions::new(),
             viewport: Viewport::default(),

@@ -24,6 +24,7 @@ pub struct ColourPalette {
     pub white_key_piano_roll_row: Colour,
     pub time_grid: Colour,
     pub selected: Colour,
+    pub player_head: Colour,
 }
 
 impl Default for ColourPalette {
@@ -40,6 +41,7 @@ impl Default for ColourPalette {
             white_key_piano_roll_row: Colour { r: 0.45, g: 0.45, b: 0.45, a: 1.0 },
             time_grid: Colour { r: 0.2, g: 0.2, b: 0.2, a: 1.0 },
             selected: c("ff0000"),
+            player_head: c("ff4444"),
         }
     }
 }

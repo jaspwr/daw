@@ -1,25 +1,27 @@
 use std::{cell::RefCell, rc::Rc};
 
+use element_creation_queue::fulfil_queue;
 use event_subscriptions::Key;
 use global::Globals;
 use glow::*;
 use midi::*;
-use midir::{MidiInput, Ignore};
+use midir::{Ignore, MidiInput};
 use piano_roll::e_piano_roll;
 use selection::{NoteRef, Selection};
-use shortcuts::k;
+use shortcuts::{k, universal_shortcuts};
 use top_bar::fb_topbar;
 use track::TrackData;
 use ui::{
     element::Element,
     frame_buf::FrameBuf,
     gl::RENDER_MODE_SOLID,
+    reactive::Reactive,
     style::{Colour, Style},
     text::{Font, Text},
     *,
 };
 
-use crate::{event_subscriptions::{handle_event_subscriptions}, shortcuts::key_from_symbol};
+use crate::{event_subscriptions::handle_event_subscriptions, shortcuts::key_from_symbol};
 
 mod event_subscriptions;
 mod global;
@@ -27,12 +29,13 @@ mod midi;
 mod piano_roll;
 mod project;
 mod selection;
+mod shortcuts;
 mod top_bar;
 mod track;
 mod ui;
 mod utils;
 mod v_scroll_container;
-mod shortcuts;
+mod element_creation_queue;
 
 fn main() {
     unsafe {
@@ -68,35 +71,6 @@ fn main() {
         gl.enable(glow::BLEND);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
 
-        let midi = MidiClip {
-            notes: vec![
-                Note {
-                    note: 60,
-                    velocity: 100,
-                    start: 0,
-                    length: 100,
-                },
-                Note {
-                    note: 61,
-                    velocity: 100,
-                    start: 100,
-                    length: 100,
-                },
-                Note {
-                    note: 62,
-                    velocity: 100,
-                    start: 50,
-                    length: 100,
-                },
-                Note {
-                    note: 63,
-                    velocity: 100,
-                    start: 0,
-                    length: 100,
-                },
-            ],
-        };
-
         let (width, height) = window.drawable_size();
         let screen_dims = ComputedDimensions {
             width: width as f32,
@@ -105,19 +79,16 @@ fn main() {
         let mut globals = Globals::create(&gl, element_shader, texture_shader, screen_dims, font);
         globals.selection = Selection::MidiNotes(vec![(0, vec![NoteRef { note: 60, start: 0 }])]);
 
-        globals.subscriptions.subscribe_key(Rc::new(RefCell::new(
-            |key: &Key, globals: &mut Globals| {
-                if *key == k("a")  {
-                    println!("HASJKDHKAJSDHAJKSDKHJASDJAHSKDJHASDKHJ  {:?}", key);
-                }
-            },
-        )));
+        universal_shortcuts(&mut globals);
 
-        // globals.subscriptions.subscribe_text_input(Rc::new(RefCell::new(
-        //     |text: &String, globals: &mut Globals| {
-        //         println!("HASJKDHKAJSDHAJKSDKHJASDJAHSKDJHASDKHJ  {:?}", text);
-        //     },
-        // )));
+        if let TrackData::Midi(_, clip) = &mut globals.loaded_project.tracks[0].data {
+            clip.notes.push(Reactive::new(Note {
+                note: 60,
+                velocity: 100,
+                start: 0,
+                length: 100,
+            }));
+        }
 
         let mut midi_in = MidiInput::new("midir reading input").unwrap();
         midi_in.ignore(Ignore::None);
@@ -151,7 +122,6 @@ fn main() {
             RENDER_MODE_SOLID,
         );
 
-
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
         let mut top_bar = fb_topbar(&gl, &mut globals, &screen_dims);
@@ -181,36 +151,9 @@ fn main() {
                         resize = true;
                     }
                 }
-
-                if let sdl2::event::Event::KeyDown {
-                    timestamp,
-                    window_id,
-                    keycode,
-                    scancode,
-                    keymod,
-                    repeat,
-                } = event
-                {
-                    if let Some(keycode) = keycode {
-                        if keycode == sdl2::keyboard::Keycode::Escape {
-
-                            globals.loaded_project.tracks[0].mutate(Box::new(|track| {
-                                match track.data {
-                                    TrackData::Midi(_, ref mut midi_clip) => {
-                                        midi_clip.notes.push(Note {
-                                            note: 60,
-                                            velocity: 100,
-                                            start: 0,
-                                            length: 100,
-                                        });
-                                    }
-                                    _ => {}
-                                }
-                            }));
-                        }
-                    }
-                }
             }
+
+            fulfil_queue(&gl, &mut globals);
 
             if resize {
                 resize = false;

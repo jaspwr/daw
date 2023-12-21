@@ -4,7 +4,7 @@ use sdl2::{libc::glob, mouse::MouseButton};
 
 use crate::{
     event_subscriptions::{Key, SubscriptionId},
-    global::Globals,
+    global::{Globals, EditingContext}, utils::{RcRefCell, rc_ref_cell},
 };
 
 use super::{
@@ -32,6 +32,7 @@ pub fn e_f32_field(
     let current = value.get().borrow().to_string();
     let typing_buf = Reactive::new(current.to_string());
     let inserting_at = Reactive::new(0);
+    let previous_editor_context = Reactive::new(globals.editor_context.clone());
 
     let text = Text::new(
         gl,
@@ -77,6 +78,8 @@ pub fn e_f32_field(
 
     let typing_buf = typing_buf.clone();
     let value = value.clone();
+    let uid = container.uid();
+
     globals.subscriptions.subscribe_click_in_area(
         container.borrow().bounding_box.clone(),
         Rc::new(RefCell::new(
@@ -84,7 +87,7 @@ pub fn e_f32_field(
                 let typing_buf = typing_buf.clone();
                 let value = value.clone();
                 if mb == &MouseButton::Left {
-                    start_input(globals, typing_buf, value);
+                    start_input(globals, typing_buf, value, uid, previous_editor_context.clone());
                 }
             },
         )),
@@ -93,8 +96,9 @@ pub fn e_f32_field(
     container
 }
 
-fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: Reactive<f32>) {
-    globals.keyboard_grabbed = true;
+fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: Reactive<f32>, uid: usize, previous_editor_context: Reactive<EditingContext>) {
+    previous_editor_context.set(globals.editor_context.clone());
+    globals.editor_context = EditingContext::InputField(uid);
 
     typing_buf.set(value.get_copy().to_string());
 
@@ -113,6 +117,10 @@ fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: React
     };
 
     let value = value.clone();
+
+    let mut key_sub_id = Reactive::new(0);
+
+    let key_sub_id_cpy = key_sub_id.clone();
     let key_sub = globals.subscriptions.subscribe_key(Rc::new(RefCell::new(
         move |key: &Key, globals: &mut Globals| {
             let mut value = value.clone();
@@ -128,7 +136,7 @@ fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: React
                 }));
             }
             if key == sdl2::keyboard::Keycode::Return as u8 {
-                globals.keyboard_grabbed = false;
+                globals.editor_context = previous_editor_context.clone().get_copy();
                 let new_value_ = typing_buf.get();
                 let new_value = new_value_.borrow();
 
@@ -138,9 +146,12 @@ fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: React
                 }
 
                 globals.subscriptions.unsubscribe_text_input(char_sub);
+                globals.subscriptions.unsubscribe_key(key_sub_id_cpy.clone().get_copy());
             }
         },
     )));
+
+    key_sub_id <<= key_sub;
 
     // globals.active_input = Some(value.clone());
 }

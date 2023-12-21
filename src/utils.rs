@@ -1,3 +1,5 @@
+use std::{rc::Rc, cell::RefCell};
+
 pub fn note_name(note: u8, show_octave: bool) -> String {
     let note_names = [
         "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
@@ -28,4 +30,11 @@ pub unsafe fn fetch_ptr<T>(ptr: *mut T) -> Box<T> {
 
 pub fn leak<T>(box_: Box<T>) -> *mut T {
     Box::into_raw(box_)
+}
+
+/// You wouldn't understand, bro... You just wouldn't get it.
+pub type RcRefCell<T> = Rc<RefCell<T>>;
+
+pub fn rc_ref_cell<T>(data: T) -> RcRefCell<T> {
+    Rc::new(RefCell::new(data))
 }

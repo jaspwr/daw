@@ -51,6 +51,40 @@ pub fn fb_topbar(
         frame_bounding_box.clone(),
     );
 
+    let key_mod_text = Text::new(
+        gl,
+        String::new(),
+        20.,
+        &globals.main_font,
+        globals.colour_palette.text_primary,
+        Position::origin(),
+        needs_rerender.clone(),
+    );
+
+    let key_mod_element = Element::new(
+        gl,
+        p(100., 0.),
+        Size::Fixed(10.),
+        Size::Fixed(10.),
+        None,
+        Some(key_mod_text),
+        needs_rerender.clone(),
+        frame_bounding_box.clone(),
+        vec![],
+    );
+
+    key_mod_element.subscribe_mutation_to_reactive(
+        &globals.shortcuts_buffer.amount_modifier,
+        Box::new(move |element, new_value| {
+            let new_value = new_value.clone();
+            element.text_node.as_mut().unwrap().mutate(Box::new(move |text| {
+                text.text = new_value
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|| String::new());
+            }));
+        }),
+    );
+
     let container = Element::new(
         gl,
         Position::origin(),
@@ -60,7 +94,7 @@ pub fn fb_topbar(
         None,
         needs_rerender.clone(),
         frame_bounding_box.clone(),
-        vec![tempo],
+        vec![tempo, key_mod_element],
     );
 
     frame_buf.root_node = Some(container);

@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use glow::*;
 
@@ -11,7 +12,10 @@ use super::style::*;
 use super::text::Text;
 use super::*;
 
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
 pub struct Element {
+    uid: usize,
     pub position: Position,
     pub dimensions: Dimensions,
     pub bounding_box: BoundingBoxRef,
@@ -42,6 +46,10 @@ impl ElementRef {
 
     pub fn borrow<'a>(&'a self) -> &'a Element {
         unsafe { &*self.ptr }
+    }
+
+    pub fn uid(&self) -> usize {
+        unsafe { (*self.ptr).uid }
     }
 
     // pub fn borrow_mut<'a>(&'a mut self) -> &'a mut Element {
@@ -105,31 +113,32 @@ impl ElementRef {
         }));
     }
 
-    // pub fn subscribe_recreate_to_reactive<T>(
-    //     &self,
-    //     reactive: &Reactive<T>,
-    //     create: Box<dyn Fn(&T) -> ElementRef>,
-    // ) where
-    //     T: Clone + 'static,
-    // {
-    //     let element = element.clone();
+    pub fn subscribe_mutation_to_reactive_rc<T>(
+        &self,
+        reactive: &Reactive<T>,
+        callback: Rc<dyn Fn(&mut Element, &T)>,
+    ) where
+        T: Clone + 'static,
+    {
+        let mut element = self.clone();
 
-    //     let id = {
-    //         let element = element.clone();
-    //         let callback = Rc::new(create);
-    //         reactive.subscribe(Box::new(move |new_value| {
-    //             let new_value = new_value.clone();
-    //             let callback = callback.clone();
-    //             let new_element = callback(&new_value);
-    //             element.replace(new_element.borrow().clone());
-    //         }))
-    //     };
+        let id = {
+            let element = element.clone();
+            reactive.subscribe(Box::new(move |new_value| {
+                let new_value = new_value.clone();
+                let callback = callback.clone();
+                element.mutate(Box::new(move |element: &mut Element| {
+                    callback(element, &new_value);
+                }));
+            }))
+        };
 
-    //     let reactive = reactive.clone();
-    //     element.borrow_mut().on_cleanup.push(Box::new(move || {
-    //         reactive.unsubscribe(id);
-    //     }));
-    // }
+        let reactive = reactive.clone();
+        element.add_cleanup_callback(Box::new(move || {
+            reactive.unsubscribe(id);
+        }));
+    }
+
 }
 
 impl Clone for ElementRef {
@@ -171,8 +180,10 @@ impl Element {
         children: Vec<ElementRef>,
     ) -> ElementRef {
         needs_rerender.replace(true);
+        let uid = ID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         ElementRef::new(Self {
+            uid,
             position,
             dimensions: Dimensions { width, height },
             children,

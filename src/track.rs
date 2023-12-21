@@ -6,8 +6,8 @@ use std::{
 };
 
 use crate::{
-    midi::MidiClip,
-    ui::{reactive::Reactive, style::Colour},
+    midi::{MidiClip, Note},
+    ui::{reactive::Reactive, style::Colour, reactive_list::ReactiveListKey},
 };
 
 static TRACK_ID_COUNTER: AtomicU32 = AtomicU32::new(0);
@@ -39,6 +39,29 @@ impl Track {
             },
             type_,
             data: TrackData::new(type_),
+        }
+    }
+
+    pub fn push_note(&mut self, note: Note) -> Option<ReactiveListKey> {
+        match &mut self.data {
+            TrackData::Midi(_, clip) => Some(clip.notes.push(Reactive::new(note))) ,
+            _ => None
+        }
+    }
+
+    pub fn remove_note(&mut self, note_id: ReactiveListKey) {
+        match &mut self.data {
+            TrackData::Midi(_, clip) => {
+                clip.notes.remove(&note_id);
+            },
+            _ => {}
+        }
+    }
+
+    pub fn get_note_from_id(&self, note_id: ReactiveListKey) -> Option<Reactive<Note>> {
+        match &self.data {
+            TrackData::Midi(_, clip) => clip.notes.get_copy(note_id),
+            _ => None
         }
     }
 }

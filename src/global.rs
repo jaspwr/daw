@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::default;
 use std::rc::Rc;
 
 use glow::*;
@@ -6,6 +7,7 @@ use glow::*;
 use crate::event_subscriptions::Subscriptions;
 use crate::project::Project;
 use crate::selection::Selection;
+use crate::shortcuts::ShortcutsBuffer;
 use crate::ui::{gl::*, ComputedPosition};
 use crate::ui::reactive::Reactive;
 use crate::ui::style::*;
@@ -14,9 +16,11 @@ use crate::ui::ComputedDimensions;
 
 pub struct Globals {
     pub loaded_project: Project,
+    pub playing_state: PlayingState,
     pub selection: Selection,
     pub viewport: Viewport,
-    pub keyboard_grabbed: bool,
+    pub shortcuts_buffer: ShortcutsBuffer,
+    pub editor_context: EditingContext,
     pub subscriptions: Subscriptions,
     pub element_uniform_locations: HashMap<&'static str, UniformLocation>,
     pub texture_uniform_locations: HashMap<&'static str, UniformLocation>,
@@ -65,9 +69,11 @@ impl Globals {
 
         Globals {
             selection: Selection::default(),
+            playing_state: PlayingState::default(),
             element_uniform_locations,
             texture_uniform_locations,
-            keyboard_grabbed: false,
+            shortcuts_buffer: ShortcutsBuffer::new(),
+            editor_context: EditingContext::PianoRoll,
             colour_palette: ColourPalette::default(),
             element_shader,
             texture_shader,
@@ -88,4 +94,48 @@ pub struct Viewport {
     pub time_scroll: Reactive<f32>,
     pub h_zoom: Reactive<f32>,
     pub v_zoom: Reactive<f32>,
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum EditingContext {
+    PianoRoll,
+    InputField(usize),
+    CommandPallet
+}
+
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
+pub enum PlayingState {
+    #[default]
+    Stopped,
+    Playing,
+    Recording,
+}
+
+impl PlayingState {
+    pub fn is_playing(&self) -> bool {
+        match self {
+            PlayingState::Stopped => false,
+            PlayingState::Playing => true,
+            PlayingState::Recording => true,
+        }
+    }
+
+    pub fn play_pause(&mut self) {
+        match self {
+            PlayingState::Playing => *self = PlayingState::Stopped,
+            PlayingState::Stopped => *self = PlayingState::Playing,
+            PlayingState::Recording => *self = PlayingState::Stopped,
+        }
+    }
+}
+
+
+impl EditingContext {
+    pub fn grabs_keyboard(&self) -> bool {
+        match self {
+            EditingContext::InputField(_) => true,
+            EditingContext::CommandPallet => true,
+            _ => false,
+        }
+    }
 }

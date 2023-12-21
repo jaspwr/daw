@@ -185,6 +185,9 @@ fn handle_key_down(globals: &mut Globals, event: &sdl2::event::Event) {
     }
 
     if let Some(code) = code {
+        let code = code;
+        println!("{}", *code as u8);
+
         for callbacks in callbacks_to_make {
             callbacks.borrow()(
                 &Key {

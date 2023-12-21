@@ -2,11 +2,12 @@ use std::{cell::RefCell, rc::Rc};
 
 use element_creation_queue::fulfil_queue;
 use event_subscriptions::Key;
-use global::Globals;
+use global::{Globals, PlayingState};
 use glow::*;
 use midi::*;
 use midir::{Ignore, MidiInput};
 use piano_roll::e_piano_roll;
+use sdl2::sys::{SDL_GetPerformanceCounter, SDL_GetPerformanceFrequency};
 use selection::{NoteRef, Selection};
 use shortcuts::{k, universal_shortcuts};
 use top_bar::fb_topbar;
@@ -23,6 +24,7 @@ use ui::{
 
 use crate::{event_subscriptions::handle_event_subscriptions, shortcuts::key_from_symbol};
 
+mod element_creation_queue;
 mod event_subscriptions;
 mod global;
 mod midi;
@@ -35,7 +37,6 @@ mod track;
 mod ui;
 mod utils;
 mod v_scroll_container;
-mod element_creation_queue;
 
 fn main() {
     unsafe {
@@ -54,7 +55,7 @@ fn main() {
         let font = Font::new();
         let mut text = Text::new(
             &gl,
-            "Hello".to_string(),
+            "Bitch".to_string(),
             50.,
             &font,
             Colour {
@@ -63,7 +64,10 @@ fn main() {
                 b: 1.,
                 a: 1.,
             },
-            p(10., 10.),
+            Position {
+                x: Coordinate::FractionOfParentWithOffset(1., -150.),
+                y: Coordinate::Fixed(0.),
+            },
             global_reredner.clone(),
         );
 
@@ -77,7 +81,7 @@ fn main() {
             height: height as f32,
         };
         let mut globals = Globals::create(&gl, element_shader, texture_shader, screen_dims, font);
-        globals.selection = Selection::MidiNotes(vec![(0, vec![NoteRef { note: 60, start: 0 }])]);
+        globals.selection = Selection::MidiNotes(vec![(0, vec![NoteRef { note: 60, start: 0. }])]);
 
         universal_shortcuts(&mut globals);
 
@@ -85,8 +89,8 @@ fn main() {
             clip.notes.push(Reactive::new(Note {
                 note: 60,
                 velocity: 100,
-                start: 0,
-                length: 100,
+                start: 0.,
+                length: 100.,
             }));
         }
 
@@ -131,63 +135,28 @@ fn main() {
 
         let mut resize = true;
 
-        'render: loop {
-            for event in events_loop.poll_iter() {
-                if let sdl2::event::Event::Quit { .. } = event {
-                    break 'render;
-                }
+        let mut running = true;
 
-                // println!("{:?}", event);
+        let mut NOW = SDL_GetPerformanceCounter();
+        let mut LAST = 0;
 
-                handle_event_subscriptions(&mut globals, &event);
+        while running {
+            LAST = NOW;
+            NOW = SDL_GetPerformanceCounter();
+            let delta_t = (NOW - LAST) as f64 / SDL_GetPerformanceFrequency() as f64;
 
-                if let sdl2::event::Event::Window {
-                    timestamp,
-                    window_id,
-                    win_event,
-                } = event
-                {
-                    if let sdl2::event::WindowEvent::Resized(_, _) = win_event {
-                        resize = true;
-                    }
-                }
-            }
-
-            fulfil_queue(&gl, &mut globals);
-
-            if resize {
-                resize = false;
-                frame.children_need_rerender.replace(true);
-                top_bar.children_need_rerender.replace(true);
-            }
-
-            let (width, height) = window.drawable_size();
-            gl.viewport(0, 0, width as i32, height as i32);
-            gl.uniform_2_f32(
-                Some(&globals.element_uniform_locations["window_size"]),
-                width as f32,
-                height as f32,
+            main_loop(
+                &mut events_loop,
+                &mut globals,
+                &mut resize,
+                &gl,
+                &mut frame,
+                &mut top_bar,
+                &window,
+                &mut text,
+                &mut running,
+                delta_t,
             );
-
-            let screen_dims = ComputedDimensions {
-                width: width as f32,
-                height: height as f32,
-            };
-
-            globals.screen_dims = screen_dims;
-
-            gl.clear(glow::COLOR_BUFFER_BIT);
-            // root.render(&gl, p(0., 0.), &globals, &screen_dims);
-
-            // frame.render_children(&gl, &globals, &screen_dims);
-            frame.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
-
-            // top_bar.render_children(&gl, &globals, &screen_dims);
-            top_bar.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
-
-            text.render(&gl, ComputedPosition::origin(), &globals, &screen_dims);
-
-            window.gl_swap_window();
         }
 
         // root.cleanup(&gl);
@@ -196,6 +165,87 @@ fn main() {
 
         gl.delete_program(element_shader);
     }
+}
+
+fn main_loop(
+    events_loop: &mut sdl2::EventPump,
+    globals: &mut Globals,
+    resize: &mut bool,
+    gl: &Context,
+    frame: &mut FrameBuf,
+    top_bar: &mut FrameBuf,
+    window: &sdl2::video::Window,
+    text: &mut Text,
+    running: &mut bool,
+    delta_t: f64,
+) {
+    for event in events_loop.poll_iter() {
+        if let sdl2::event::Event::Quit { .. } = event {
+            *running = false;
+            return;
+        }
+
+        // println!("{:?}", event);
+
+        handle_event_subscriptions(globals, &event);
+
+        if let sdl2::event::Event::Window {
+            timestamp,
+            window_id,
+            win_event,
+        } = event
+        {
+            if let sdl2::event::WindowEvent::Resized(_, _) = win_event {
+                *resize = true;
+            }
+        }
+    }
+
+    fulfil_queue(gl, globals);
+
+    if globals.playing_state.is_playing() {
+        // println!("{}", globals.loaded_project.player_time.get_copy());
+        let delta_beats: Time = delta_t as Time * (globals.loaded_project.tempo.get_copy() as Time / 60.);
+        globals.loaded_project.player_time += delta_beats;
+    }
+
+    if *resize {
+        *resize = false;
+        frame.children_need_rerender.replace(true);
+        top_bar.children_need_rerender.replace(true);
+    }
+
+    let (width, height) = window.drawable_size();
+    unsafe {
+        gl.viewport(0, 0, width as i32, height as i32);
+        gl.uniform_2_f32(
+            Some(&globals.element_uniform_locations["window_size"]),
+            width as f32,
+            height as f32,
+        );
+    }
+
+    let screen_dims = ComputedDimensions {
+        width: width as f32,
+        height: height as f32,
+    };
+
+    globals.screen_dims = screen_dims;
+
+    unsafe {
+        gl.clear(glow::COLOR_BUFFER_BIT);
+    }
+    // root.render(&gl, p(0., 0.), &globals, &screen_dims);
+
+    // frame.render_children(&gl, &globals, &screen_dims);
+    frame.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
+
+    // top_bar.render_children(&gl, &globals, &screen_dims);
+    top_bar.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
+
+    text.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
+
+    window.gl_swap_window();
 }
 
 const MAIN_VERTEX_SHADER_SOURCE: &str = include_str!("shaders/main_vert.vert");

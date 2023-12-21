@@ -1,7 +1,9 @@
 use glow::*;
+use serde::de;
 
 use crate::global::Globals;
 
+#[derive(Clone, Debug)]
 pub struct Style {
     pub visible: bool,
     pub render_self: bool,
@@ -22,6 +24,8 @@ pub struct ColourPalette {
     pub white_key: Colour,
     pub black_key_piano_roll_row: Colour,
     pub white_key_piano_roll_row: Colour,
+    pub black_key_piano_roll_row_alt: Colour,
+    pub white_key_piano_roll_row_alt: Colour,
     pub time_grid: Colour,
     pub selected: Colour,
     pub player_head: Colour,
@@ -39,7 +43,9 @@ impl Default for ColourPalette {
             white_key: c("dddddd"),
             black_key_piano_roll_row: Colour { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
             white_key_piano_roll_row: Colour { r: 0.45, g: 0.45, b: 0.45, a: 1.0 },
-            time_grid: Colour { r: 0.2, g: 0.2, b: 0.2, a: 1.0 },
+            black_key_piano_roll_row_alt: Colour { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
+            white_key_piano_roll_row_alt: Colour { r: 0.4, g: 0.4, b: 0.4, a: 1.0 },
+            time_grid: c("444444"),
             selected: c("ff0000"),
             player_head: c("ff4444"),
         }

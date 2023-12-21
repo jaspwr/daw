@@ -1,9 +1,9 @@
 use crate::ui::{reactive::Reactive, reactive_list::ReactiveList};
 
 
-pub type Time = u32;
+pub type Time = f64;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Note {
     pub note: u32,
     pub velocity: u32,

@@ -103,7 +103,10 @@ impl<T> ReactiveList<T> {
         }
     }
 
-    pub fn subscribe_to_push(&self, callback: ReactiveListSubscriptionCallback<T>) -> ReactiveSubscriptionId {
+    pub fn subscribe_to_push(
+        &self,
+        callback: ReactiveListSubscriptionCallback<T>,
+    ) -> ReactiveSubscriptionId {
         let id = ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.push_subscriptions
             .borrow_mut()
@@ -117,7 +120,10 @@ impl<T> ReactiveList<T> {
             .retain(|dependant| dependant.id != id);
     }
 
-    pub fn subscribe_to_remove(&self, callback: ReactiveListSubscriptionCallback<()>) -> ReactiveSubscriptionId {
+    pub fn subscribe_to_remove(
+        &self,
+        callback: ReactiveListSubscriptionCallback<()>,
+    ) -> ReactiveSubscriptionId {
         let id = ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.remove_subscriptions
             .borrow_mut()
@@ -136,12 +142,25 @@ impl<T> ReactiveList<T>
 where
     T: Clone,
 {
-    pub fn copy_of_whole_list(&self) -> Vec<T> {
+    pub fn get_copy(&self, key: ReactiveListKey) -> Option<T> {
+        unsafe {
+            let items = fetch_ptr(self.items);
+            if let Some((_, item)) = (*items).iter().find(|(k, _)| *k == key) {
+                let item = item.clone();
+                leak(items);
+                return Some(item);
+            }
+            leak(items);
+            None
+        }
+    }
+
+    pub fn copy_of_whole_list(&self) -> Vec<(ReactiveListKey, T)> {
         unsafe {
             let items = fetch_ptr(self.items);
             let list = (*items).clone();
             leak(items);
-            list.into_iter().map(|(_, i)| i).collect()
+            list
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, ops::{ShlAssign, AddAssign, SubAssign, Add, Sub, Mul, Div}};
+use std::{cell::RefCell, rc::Rc, ops::{ShlAssign, AddAssign, SubAssign, Add, Sub, Mul, Div, DivAssign, MulAssign}};
 
 use sdl2::libc::PACKET_ADD_MEMBERSHIP;
 use serde::Serializer;
@@ -142,7 +142,7 @@ impl<T> Drop for Reactive<T>
 
 impl<T> AddAssign<T> for Reactive<T>
 where
-    T: Clone + std::ops::AddAssign + 'static,
+    T: Clone + AddAssign + 'static,
 {
     fn add_assign(&mut self, rhs: T) {
         let rhs = rhs.clone();
@@ -154,12 +154,36 @@ where
 
 impl<T> SubAssign<T> for Reactive<T>
 where
-    T: Clone + std::ops::SubAssign + 'static,
+    T: Clone + SubAssign + 'static,
 {
     fn sub_assign(&mut self, rhs: T) {
         let rhs = rhs.clone();
         self.mutate(Box::new(move |value: &mut T| {
             *value -= rhs.clone();
+        }));
+    }
+}
+
+impl<T> MulAssign<T> for Reactive<T>
+where
+    T: Clone + MulAssign + 'static,
+{
+    fn mul_assign(&mut self, rhs: T) {
+        let rhs = rhs.clone();
+        self.mutate(Box::new(move |value: &mut T| {
+            *value *= rhs.clone();
+        }));
+    }
+}
+
+impl<T> DivAssign<T> for Reactive<T>
+where
+    T: Clone + DivAssign + 'static,
+{
+    fn div_assign(&mut self, rhs: T) {
+        let rhs = rhs.clone();
+        self.mutate(Box::new(move |value: &mut T| {
+            *value /= rhs.clone();
         }));
     }
 }

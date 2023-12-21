@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+element_macro = { path = "./element_macro" }
 glow = "0.13.0"
 midi-control = "0.2.2"
 midir = "0.9.1"

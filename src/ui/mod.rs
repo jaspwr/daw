@@ -11,6 +11,7 @@ pub mod style;
 pub mod text;
 pub mod input;
 pub mod scroll_window;
+pub mod element_macro;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Coordinate {

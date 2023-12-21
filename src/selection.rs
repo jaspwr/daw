@@ -1,6 +1,6 @@
 use std::default;
 
-use crate::track::TrackId;
+use crate::{track::TrackId, midi::Time};
 
 #[derive(Default)]
 pub enum Selection {
@@ -11,5 +11,5 @@ pub enum Selection {
 
 pub struct NoteRef {
     pub note: u32,
-    pub start: u32,
+    pub start: Time,
 }

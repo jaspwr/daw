@@ -60,7 +60,7 @@ impl Track {
 
     pub fn get_note_from_id(&self, note_id: ReactiveListKey) -> Option<Reactive<Note>> {
         match &self.data {
-            TrackData::Midi(_, clip) => clip.notes.get_copy(note_id),
+            TrackData::Midi(_, clip) => clip.get_note(note_id),
             _ => None
         }
     }

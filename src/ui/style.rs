@@ -13,6 +13,7 @@ pub struct Style {
     pub padding: f32,
     pub padding_top: f32,
     pub padding_left: f32,
+    pub alt: Option<(f32, f32, Colour)>,
 }
 
 pub struct ColourPalette {
@@ -41,10 +42,10 @@ impl Default for ColourPalette {
             white: Colour { r: 1.0, g: 1.0, b: 1.0, a: 1.0 },
             black_key: c("222222"),
             white_key: c("dddddd"),
-            black_key_piano_roll_row: Colour { r: 0.3, g: 0.3, b: 0.3, a: 1.0 },
+            black_key_piano_roll_row: Colour { r: 0.38, g: 0.38, b: 0.38, a: 1.0 },
             white_key_piano_roll_row: Colour { r: 0.45, g: 0.45, b: 0.45, a: 1.0 },
-            black_key_piano_roll_row_alt: Colour { r: 0.25, g: 0.25, b: 0.25, a: 1.0 },
-            white_key_piano_roll_row_alt: Colour { r: 0.4, g: 0.4, b: 0.4, a: 1.0 },
+            black_key_piano_roll_row_alt: Colour { r: 0.34, g: 0.34, b: 0.34, a: 1.0 },
+            white_key_piano_roll_row_alt: Colour { r: 0.42, g: 0.42, b: 0.42, a: 1.0 },
             time_grid: c("444444"),
             selected: c("ff0000"),
             player_head: c("ff4444"),
@@ -63,6 +64,7 @@ impl Default for Style {
             padding: 0.,
             padding_top: 0.,
             padding_left: 0.,
+            alt: None,
         }
     }
 }
@@ -80,6 +82,14 @@ impl Style {
                 Some(&globals.element_uniform_locations["border_width"]),
                 self.border_width,
             );
+
+            if let Some((width, offset, col)) = self.alt {
+                gl.uniform_1_f32(Some(&globals.element_uniform_locations["alt_width"]), width);
+                gl.uniform_1_f32(Some(&globals.element_uniform_locations["alt_offset"]), offset);
+                col.set_uniform(gl, &globals.element_uniform_locations["alt_col"]);
+            } else {
+                gl.uniform_1_f32(Some(&globals.element_uniform_locations["alt_width"]), 0.);
+            }
         }
     }
 }

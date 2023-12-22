@@ -1,15 +1,29 @@
-use std::default;
+use std::{
+    collections::{HashMap, HashSet},
+    default,
+};
 
-use crate::{track::TrackId, midi::Time};
+use crate::{midi::Time, track::TrackId, ui::reactive_list::ReactiveListKey};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum Selection {
     #[default]
     None,
-    MidiNotes(Vec<(TrackId, Vec<NoteRef>)>),
+    MidiNotes(HashMap<TrackId, HashSet<ReactiveListKey>>),
 }
 
-pub struct NoteRef {
-    pub note: u32,
-    pub start: Time,
+impl Selection {
+    pub fn is_note_selected(&self, track_id: TrackId, note_id: ReactiveListKey) -> bool {
+        match self {
+            Selection::MidiNotes(track_map) => match track_map.get(&track_id) {
+                Some(track) => track.contains(&note_id),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        *self = Selection::None;
+    }
 }

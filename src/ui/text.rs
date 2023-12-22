@@ -98,7 +98,16 @@ impl Text {
     }
 
     pub fn mutate(&mut self, func: Box<dyn Fn(&mut Text)>) {
+        let pre_text = self.text.clone();
         func(self);
+
+        // FIXME: This means that if the colour is changed or
+        //        something but not the text it won't rerender.
+
+        if self.text == pre_text {
+            return;
+        }
+
         self.needs_glyphs_rerender = true;
         self.needs_rerender.replace(true);
     }

@@ -1,4 +1,6 @@
-use crate::ui::{reactive::Reactive, reactive_list::ReactiveList};
+use std::ops::{IndexMut, Index};
+
+use crate::ui::{reactive::Reactive, reactive_list::{ReactiveList, ReactiveListKey}};
 
 
 pub type Time = f64;
@@ -19,5 +21,9 @@ pub struct MidiClip {
 impl MidiClip {
     pub fn new() -> Self {
         MidiClip { notes: ReactiveList::new() }
+    }
+
+    pub fn get_note(&self, key: ReactiveListKey) -> Option<Reactive<Note>> {
+        self.notes.get_copy_of_item(key)
     }
 }

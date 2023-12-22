@@ -1,17 +1,19 @@
 use std::{borrow::BorrowMut, cell::RefCell, collections::HashMap, ops::ControlFlow, rc::Rc};
 
 use glow::Context;
+use midi_control::note;
 use sdl2::{keyboard, libc::glob};
 
 use crate::{
-    element_creation_queue::{queue_element, CreateElementFn},
     bind_reactives,
+    element_creation_queue::{queue_element, CreateElementFn},
     global::{Globals, Viewport},
     midi::*,
-    selection::{NoteRef, Selection},
+    project::TimeSignature,
+    selection::Selection,
     track::{TrackData, TrackId},
     ui::{element::*, scroll_window::e_scroll_window},
-    ui::{element_macro::ElementInitDeps, reactive_list::ReactiveListKey, style::*, text::Text},
+    ui::{macros::ElementInitDeps, reactive_list::ReactiveListKey, style::*, text::Text},
     ui::{reactive::Reactive, *},
     utils::{note_name, rc_ref_cell, RcRefCell},
 };
@@ -23,7 +25,7 @@ pub fn e_piano_roll(
     needs_rerender: Rc<RefCell<bool>>,
     frame_bounding_box: BoundingBoxRef,
 ) -> ElementRef {
-    globals.viewport.h_zoom.set(11.);
+    globals.viewport.h_zoom.set(35.);
     globals.viewport.v_zoom.set(12.);
 
     let style = Style {
@@ -99,8 +101,8 @@ pub fn e_piano_roll(
                 Box::new(move |gl: &Context, globals: &mut Globals| {
                     let note_element = e_midi_note(
                         &note,
+                        key.clone(),
                         globals,
-                        false,
                         gl,
                         &needs_rerender,
                         &frame_bounding_box,
@@ -155,10 +157,12 @@ pub fn e_piano_roll(
                 Box::new(move |gl: &Context, globals: &mut Globals| {
                     let element_note_id_map = element_note_id_map.clone();
 
+                    let (note_id, note) = n.clone();
+
                     let note_element = e_midi_note(
-                        &n.1.clone(),
+                        &note.clone(),
+                        note_id.clone(),
                         globals,
-                        false,
                         gl,
                         &needs_rerender,
                         &frame_bounding_box,
@@ -190,38 +194,40 @@ pub fn e_piano_roll(
         needs_rerender.clone(),
         frame_bounding_box.clone(),
         true,
+        500.,
         false,
+        0.,
         vec![roll, player_head],
     );
 
     return scroll_win;
 }
 
-fn mark_selected(
-    globals: &mut Globals,
-    track_id: u32,
-    notes: &mut Vec<Vec<(Reactive<Note>, bool)>>,
-) {
-    if let Selection::MidiNotes(selection) = &globals.selection {
-        for (track, sel_notes) in selection.iter() {
-            if *track == track_id {
-                flag_selected(sel_notes, notes);
-                break;
-            }
-        }
-    }
-}
+// fn mark_selected(
+//     globals: &mut Globals,
+//     track_id: u32,
+//     notes: &mut Vec<Vec<(Reactive<Note>, bool)>>,
+// ) {
+//     if let Selection::MidiNotes(selection) = &globals.loaded_project.selection {
+//         for (track, sel_notes) in selection.iter() {
+//             if *track == track_id {
+//                 flag_selected(sel_notes, notes);
+//                 break;
+//             }
+//         }
+//     }
+// }
 
-fn flag_selected(sel_notes: &Vec<NoteRef>, notes: &mut Vec<Vec<(Reactive<Note>, bool)>>) {
-    for sel_note in sel_notes.iter() {
-        for note in &mut *notes[sel_note.note as usize] {
-            let start = note.0.get().borrow().start.clone();
-            if start == sel_note.start {
-                note.1 = true;
-            }
-        }
-    }
-}
+// fn flag_selected(sel_notes: &Vec<NoteRef>, notes: &mut Vec<Vec<(Reactive<Note>, bool)>>) {
+//     for sel_note in sel_notes.iter() {
+//         for note in &mut *notes[sel_note.note as usize] {
+//             let start = note.0.get().borrow().start.clone();
+//             if start == sel_note.start {
+//                 note.1 = true;
+//             }
+//         }
+//     }
+// }
 
 fn e_time_grid(
     gl: &glow::Context,
@@ -255,23 +261,6 @@ fn e_time_grid(
     };
 
     for i in 0..divisions_count {
-        let x = {
-            let time_scroll = globals.viewport.time_scroll.clone();
-            let h_zoom = globals.viewport.h_zoom.clone();
-            let total_width = total_width.clone();
-            Rc::new(move || {
-                let time_scroll = time_scroll.get_copy();
-                let h_zoom = h_zoom.get_copy();
-                let total_width = total_width();
-
-                let mut x = x_of_time_no_global_access(i as Time, 0., time_scroll, h_zoom);
-                while x < 0. {
-                    x += total_width;
-                }
-                x % total_width
-            })
-        };
-
         // let bar = e_bar(
         //     gl,
         //     globals,
@@ -367,7 +356,6 @@ fn e_player_head(
         vec![],
     );
 
-
     let ts = globals.viewport.time_scroll.clone();
     let pt = globals.loaded_project.player_time.clone();
     let hz = globals.viewport.h_zoom.clone();
@@ -439,7 +427,7 @@ fn e_note(
 ) -> ElementRef {
     let key = e_key(globals, note, gl, &needs_rerender, &frame_bounding_box);
 
-    let mut children = vec![key];
+    let mut children = vec![key.clone()];
 
     // es_notes(
     //     notes,
@@ -458,30 +446,18 @@ fn e_note(
         ..Default::default()
     };
 
-    let mut alternating_bar_style = Style::default();
+    let mut alt_col = BLACK;
 
-    (
-        row_style.background_colour,
-        alternating_bar_style.background_colour,
-    ) = if is_black_key(note) {
+    (row_style.background_colour, alt_col) = if is_black_key(note) {
         (
             globals.colour_palette.black_key_piano_roll_row,
-            globals.colour_palette.black_key_piano_roll_row,
+            globals.colour_palette.black_key_piano_roll_row_alt,
         )
     } else {
         (
             globals.colour_palette.white_key_piano_roll_row,
-            globals.colour_palette.white_key_piano_roll_row,
+            globals.colour_palette.white_key_piano_roll_row_alt,
         )
-    };
-
-    let bar_width = {
-        let h_zoom = globals.viewport.h_zoom.clone();
-        let time_signature = globals.loaded_project.time_signature.clone();
-        Rc::new(move || {
-            let beats_per_measure = time_signature.get_copy().beats_per_measure();
-            time_to_width(beats_per_measure as Time, h_zoom.get_copy())
-        })
     };
 
     let note_height = globals.viewport.v_zoom.get().borrow().clone();
@@ -500,63 +476,57 @@ fn e_note(
         children,
     );
 
-    key_row.subscribe_mutation_to_reactive(
-        &globals.viewport.v_zoom,
-        Box::new(move |element: &mut Element, v_zoom: &f32| {
-            let note_height = v_zoom;
-            let y = note_height * note as f32;
+    let vz = globals.viewport.v_zoom.clone();
+    let hz = globals.viewport.h_zoom.clone();
+    let ts = globals.viewport.time_scroll.clone();
+    let t_sig = globals.loaded_project.time_signature.clone();
 
-            element.position.y = Coordinate::Fixed(y);
-            element.dimensions.height = Size::Fixed(*note_height);
-        }),
-    );
+    let keyboard_width = globals.piano_roll_keyboard_width;
+    bind_reactives! {
+        key_row {
+            [vz] => (|e: &mut Element, vz| { e.dimensions.height = Size::Fixed(vz);}),
+            [hz, ts, t_sig] => (move |e: &mut Element, hz, ts, t_sig: TimeSignature| {
+                let beats_per_measure = t_sig.beats_per_measure();
+                let bar_width = time_to_width(beats_per_measure as Time, hz);
+
+                let x_offset = x_of_time_no_global_access(0., keyboard_width, ts, hz);
+
+                e.style.alt = Some((bar_width, x_offset, alt_col));
+            })
+        }
+    }
 
     key_row
 }
 
 fn e_midi_note(
     n: &Reactive<Note>,
+    note_id: ReactiveListKey,
     globals: &Globals,
-    selected: bool,
     gl: &glow::Context,
     needs_rerender: &Rc<RefCell<bool>>,
     frame_bounding_box: &Rc<RefCell<Option<ComputedBoundingBox>>>,
 ) -> ElementRef {
-    let n_init = n.get_copy();
-    let h_zoom = globals.viewport.h_zoom.get_copy();
-    let width = n_init.length.clone() as f32 * h_zoom;
-
     let mut note_style = Style::default();
     note_style.background_colour = globals.colour_palette.white;
     note_style.border_width = 1.;
     note_style.border_colour = globals.colour_palette.time_grid;
 
-    if selected {
-        note_style.border_colour = globals.colour_palette.selected;
-        note_style.border_width = 2.;
-    }
-
-    let keyboard_width = globals.piano_roll_keyboard_width;
-    let x = x_of_time(n_init.start, globals, keyboard_width);
-
-    let note_height = globals.viewport.v_zoom.get().borrow().clone();
-    let y = note_height * n_init.note as f32;
-
     let label = Text::new(
         gl,
-        note_name(n_init.note as u8, true),
+        String::new(),
         11.,
         &globals.main_font,
         globals.colour_palette.black,
-        p(0., 2.),
+        p(2., 2.),
         needs_rerender.clone(),
     );
 
     let note = Element::new(
         gl,
-        p(x, y),
-        Size::Fixed(width),
-        Size::Fixed(note_height),
+        Position::origin(),
+        Size::Fixed(1.),
+        Size::Fixed(1.),
         Some(note_style),
         Some(label),
         needs_rerender.clone(),
@@ -565,78 +535,47 @@ fn e_midi_note(
     );
 
     let keyboard_width = globals.piano_roll_keyboard_width;
-    {
-        let n = n.clone();
-        let time_scroll = globals.viewport.time_scroll.clone();
-        note.subscribe_mutation_to_reactive(
-            &globals.viewport.h_zoom,
-            Box::new(move |element: &mut Element, new_value: &f32| {
-                let n = n.get_copy();
-                let width = n.length as f32 * new_value;
-                let time_scroll = time_scroll.get_copy();
-                let x = x_of_time_no_global_access(n.start, keyboard_width, time_scroll, h_zoom);
+    let ts = globals.viewport.time_scroll.clone();
+    let hz = globals.viewport.h_zoom.clone();
+    let vz = globals.viewport.v_zoom.clone();
+    let n = n.clone();
+    let selected = globals.loaded_project.selection.clone();
+    let selected_colour = globals.colour_palette.selected;
+    let note_outline_colour = globals.colour_palette.black;
 
-                element.dimensions.width = Size::Fixed(width);
-                element.position.x = Coordinate::Fixed(x);
-            }),
-        );
-    }
-    {
-        let n = n.clone();
-        let h_zoom = globals.viewport.h_zoom.clone();
-        note.subscribe_mutation_to_reactive(
-            &globals.viewport.time_scroll,
-            Box::new(move |element: &mut Element, new_value: &f32| {
-                let start = n.get_copy().start;
-                let x = keyboard_width + (start as f32 - new_value) as f32 * h_zoom.get_copy();
-                element.position.x = Coordinate::Fixed(x);
-            }),
-        );
-    }
-    {
-        let time_scroll = globals.viewport.time_scroll.clone();
-        let h_zoom = globals.viewport.h_zoom.clone();
-        let v_zoom = globals.viewport.v_zoom.clone();
-        note.subscribe_mutation_to_reactive(
-            &n,
-            Box::new(move |element: &mut Element, n: &Note| {
-                let time_scroll = time_scroll.get_copy();
-                let h_zoom = h_zoom.get_copy();
-                let width = n.length as f32 * h_zoom;
-                let x = x_of_time_no_global_access(n.start, keyboard_width, time_scroll, h_zoom);
+    bind_reactives! {
+        note {
+            [n, ts, hz, vz] => (|e: &mut Element, n: Note, ts, hz, vz| {
+                let width = n.length as f32 * hz;
+                let note_height = vz;
+                let x = x_of_time_no_global_access(n.start, keyboard_width, ts, hz);
+                let y = note_height * n.note as f32;
 
-                let note_height = v_zoom.get_copy();
-                let y = note_height * n_init.note as f32;
+                e.position.x = Coordinate::Fixed(x);
+                e.dimensions.width = Size::Fixed(width);
+                e.position.y = Coordinate::Fixed(y);
+                e.dimensions.height = Size::Fixed(note_height);
 
-                element.dimensions.width = Size::Fixed(width);
-                element.position.x = Coordinate::Fixed(x);
-                element.position.y = Coordinate::Fixed(y);
-
-                let note = n.note.clone();
-                element
-                    .text_node
+                let note = n.note;
+                e.text_node
                     .as_mut()
                     .unwrap()
                     .mutate(Box::new(move |text| {
                         text.text = note_name(note as u8, true);
                     }));
             }),
-        );
+            [selected] => (|e: &mut Element, s: Selection| {
+                if s.is_note_selected(0, note_id.clone()) {
+                    e.style.border_colour = selected_colour;
+                    e.style.border_width = 2.;
+                } else {
+                    e.style.border_colour = note_outline_colour;
+                    e.style.border_width = 1.;
+                }
+            })
+        }
     }
-    {
-        let n = n.clone();
-        note.subscribe_mutation_to_reactive(
-            &globals.viewport.v_zoom,
-            Box::new(move |element: &mut Element, new_value: &f32| {
-                let n = n.get_copy();
-                let note_height = new_value;
-                let y = note_height * n.note as f32;
 
-                element.position.y = Coordinate::Fixed(y);
-                element.dimensions.height = Size::Fixed(*note_height);
-            }),
-        );
-    }
     note
 }
 

@@ -12,6 +12,9 @@ uniform vec4 background_col;
 uniform vec4 border_col;
 uniform float border_width;
 uniform int mode;
+uniform vec4 alt_col;
+uniform float alt_width;
+uniform float alt_offset;
 
 uniform sampler2D tex;
 
@@ -24,6 +27,11 @@ void main() {
             color = background_col;
 
             vec2 pos = uv * dims;
+
+            if (alt_width > 0.0 && int((pos.x - alt_offset) / alt_width) % 2 == 0) {
+                color = alt_col;
+            }
+
 
             if (border_width > 0.0
                 && (pos.x < border_width

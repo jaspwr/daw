@@ -17,10 +17,9 @@ use crate::ui::ComputedDimensions;
 pub struct Globals {
     pub loaded_project: Project,
     pub playing_state: PlayingState,
-    pub selection: Selection,
     pub viewport: Viewport,
     pub shortcuts_buffer: ShortcutsBuffer,
-    pub editor_context: EditingContext,
+    pub editor_context: Reactive<EditingContext>,
     pub subscriptions: Subscriptions,
     pub element_uniform_locations: HashMap<&'static str, UniformLocation>,
     pub texture_uniform_locations: HashMap<&'static str, UniformLocation>,
@@ -49,6 +48,9 @@ impl Globals {
             "border_width",
             "mode",
             "window_size",
+            "alt_width",
+            "alt_col",
+            "alt_offset",
         ]
         .into_iter()
         .map(|name| {
@@ -68,12 +70,11 @@ impl Globals {
             .collect();
 
         Globals {
-            selection: Selection::default(),
             playing_state: PlayingState::default(),
             element_uniform_locations,
             texture_uniform_locations,
             shortcuts_buffer: ShortcutsBuffer::new(),
-            editor_context: EditingContext::PianoRoll,
+            editor_context: Reactive::new(EditingContext::PianoRoll),
             colour_palette: ColourPalette::default(),
             element_shader,
             texture_shader,

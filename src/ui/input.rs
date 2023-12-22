@@ -32,7 +32,7 @@ pub fn e_f32_field(
     let current = value.get().borrow().to_string();
     let typing_buf = Reactive::new(current.to_string());
     let inserting_at = Reactive::new(0);
-    let previous_editor_context = Reactive::new(globals.editor_context.clone());
+    let previous_editor_context = Reactive::new(globals.editor_context.get_copy());
 
     let text = Text::new(
         gl,
@@ -97,8 +97,8 @@ pub fn e_f32_field(
 }
 
 fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: Reactive<f32>, uid: usize, previous_editor_context: Reactive<EditingContext>) {
-    previous_editor_context.set(globals.editor_context.clone());
-    globals.editor_context = EditingContext::InputField(uid);
+    previous_editor_context.set(globals.editor_context.get_copy());
+    globals.editor_context <<= EditingContext::InputField(uid);
 
     typing_buf.set(value.get_copy().to_string());
 
@@ -136,7 +136,7 @@ fn start_input(globals: &mut Globals, typing_buf: Reactive<String>, value: React
                 }));
             }
             if key == sdl2::keyboard::Keycode::Return as u8 {
-                globals.editor_context = previous_editor_context.clone().get_copy();
+                globals.editor_context <<= previous_editor_context.clone().get_copy();
                 let new_value_ = typing_buf.get();
                 let new_value = new_value_.borrow();
 

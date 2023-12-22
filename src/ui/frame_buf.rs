@@ -138,7 +138,6 @@ impl FrameBuf {
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
-
         let dims = compute_dims(&self.dimensions, parent_dims);
         let pos = origin + self.position.compute(parent_dims);
 
@@ -167,7 +166,7 @@ impl FrameBuf {
         globals: &Globals,
         parent_dims: &ComputedDimensions,
     ) {
-        println!("rendering children of framebuf");
+        // println!("rendering children of framebuf");
 
         let dims = compute_dims(&self.dimensions, parent_dims);
 

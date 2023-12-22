@@ -142,7 +142,7 @@ impl<T> ReactiveList<T>
 where
     T: Clone,
 {
-    pub fn get_copy(&self, key: ReactiveListKey) -> Option<T> {
+    pub fn get_copy_of_item(&self, key: ReactiveListKey) -> Option<T> {
         unsafe {
             let items = fetch_ptr(self.items);
             if let Some((_, item)) = (*items).iter().find(|(k, _)| *k == key) {

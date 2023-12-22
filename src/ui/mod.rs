@@ -11,7 +11,12 @@ pub mod style;
 pub mod text;
 pub mod input;
 pub mod scroll_window;
-pub mod element_macro;
+pub mod macros;
+pub mod element_creation_queue;
+pub mod misc_elements;
+pub mod piano_roll;
+pub mod top_bar;
+pub mod command_palette;
 
 #[derive(Copy, Clone, Debug)]
 pub enum Coordinate {

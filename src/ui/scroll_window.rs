@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use glow::Context;
 use sdl2::libc::glob;
 
-use crate::{global::Globals, ui::style::Style};
+use crate::{global::Globals, ui::style::Style, bind_reactives};
 
 use super::{
     element::{Element, ElementRef},
@@ -17,7 +17,9 @@ pub fn e_scroll_window(
     needs_rerender: Rc<RefCell<bool>>,
     frame_bounding_box: BoundingBoxRef,
     v_scroll: bool,
+    default_v_scroll: f32,
     h_scroll: bool,
+    default_h_scroll: f32,
     children: Vec<ElementRef>,
 ) -> ElementRef {
     let element = Element::new(
@@ -35,7 +37,7 @@ pub fn e_scroll_window(
         children,
     );
 
-    let scroll = Reactive::new(WindowScroll::default());
+    let scroll = Reactive::new(WindowScroll::new(default_h_scroll, default_v_scroll));
 
 
     {
@@ -69,15 +71,16 @@ pub fn e_scroll_window(
         // }));
     }
 
-    element.subscribe_mutation_to_reactive(
-        &scroll,
-        Box::new(move |element: &mut Element, new_scroll: &WindowScroll| {
-            element.position = Position {
-                x: Coordinate::Fixed(-new_scroll.scroll_x),
-                y: Coordinate::Fixed(-new_scroll.scroll_y),
-            };
-        }),
-    );
+    bind_reactives! {
+        element {
+            [scroll] => (|e: &mut Element, s: WindowScroll| {
+                e.position = Position {
+                    x: Coordinate::Fixed(-s.scroll_x),
+                    y: Coordinate::Fixed(-s.scroll_y),
+                };
+            })
+        }
+    }
 
     return element;
 }
@@ -86,6 +89,15 @@ pub fn e_scroll_window(
 pub struct WindowScroll {
     pub scroll_x: f32,
     pub scroll_y: f32,
+}
+
+impl WindowScroll {
+    fn new(scroll_x: f32, scroll_y: f32) -> Self {
+        Self {
+            scroll_x,
+            scroll_y
+        }
+    }
 }
 
 impl Default for WindowScroll {

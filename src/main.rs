@@ -2,17 +2,18 @@ use std::{cell::RefCell, rc::Rc};
 
 use element_creation_queue::fulfil_queue;
 use event_subscriptions::Key;
-use global::{Globals, PlayingState};
+use global::{EditingContext, Globals, PlayingState};
 use glow::*;
 use midi::*;
 use midir::{Ignore, MidiInput};
 use piano_roll::e_piano_roll;
 use sdl2::sys::{SDL_GetPerformanceCounter, SDL_GetPerformanceFrequency};
-use selection::{NoteRef, Selection};
+use selection::Selection;
 use shortcuts::{k, universal_shortcuts};
 use top_bar::fb_topbar;
 use track::TrackData;
 use ui::{
+    command_palette::fb_command_palette,
     element::Element,
     frame_buf::FrameBuf,
     gl::RENDER_MODE_SOLID,
@@ -24,19 +25,16 @@ use ui::{
 
 use crate::{event_subscriptions::handle_event_subscriptions, shortcuts::key_from_symbol};
 
-mod element_creation_queue;
 mod event_subscriptions;
 mod global;
 mod midi;
-mod piano_roll;
+mod plugins;
 mod project;
 mod selection;
 mod shortcuts;
-mod top_bar;
 mod track;
 mod ui;
 mod utils;
-mod v_scroll_container;
 
 fn main() {
     unsafe {
@@ -81,18 +79,8 @@ fn main() {
             height: height as f32,
         };
         let mut globals = Globals::create(&gl, element_shader, texture_shader, screen_dims, font);
-        globals.selection = Selection::MidiNotes(vec![(0, vec![NoteRef { note: 60, start: 0. }])]);
 
         universal_shortcuts(&mut globals);
-
-        if let TrackData::Midi(_, clip) = &mut globals.loaded_project.tracks[0].data {
-            clip.notes.push(Reactive::new(Note {
-                note: 60,
-                velocity: 100,
-                start: 0.,
-                length: 100.,
-            }));
-        }
 
         let mut midi_in = MidiInput::new("midir reading input").unwrap();
         midi_in.ignore(Ignore::None);
@@ -129,6 +117,7 @@ fn main() {
         gl.clear_color(0.1, 0.2, 0.3, 1.0);
 
         let mut top_bar = fb_topbar(&gl, &mut globals, &screen_dims);
+        let mut command_palette = fb_command_palette(&gl, &mut globals, &screen_dims);
 
         let mut style = Style::default();
         style.background_colour.r = 1.;
@@ -152,6 +141,7 @@ fn main() {
                 &gl,
                 &mut frame,
                 &mut top_bar,
+                &mut command_palette,
                 &window,
                 &mut text,
                 &mut running,
@@ -174,6 +164,7 @@ fn main_loop(
     gl: &Context,
     frame: &mut FrameBuf,
     top_bar: &mut FrameBuf,
+    command_palette: &mut FrameBuf,
     window: &sdl2::video::Window,
     text: &mut Text,
     running: &mut bool,
@@ -205,7 +196,8 @@ fn main_loop(
 
     if globals.playing_state.is_playing() {
         // println!("{}", globals.loaded_project.player_time.get_copy());
-        let delta_beats: Time = delta_t as Time * (globals.loaded_project.tempo.get_copy() as Time / 60.);
+        let delta_beats: Time =
+            delta_t as Time * (globals.loaded_project.tempo.get_copy() as Time / 60.);
         globals.loaded_project.player_time += delta_beats;
     }
 
@@ -235,13 +227,14 @@ fn main_loop(
     unsafe {
         gl.clear(glow::COLOR_BUFFER_BIT);
     }
-    // root.render(&gl, p(0., 0.), &globals, &screen_dims);
 
-    // frame.render_children(&gl, &globals, &screen_dims);
     frame.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
 
-    // top_bar.render_children(&gl, &globals, &screen_dims);
     top_bar.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
+
+    if globals.editor_context.get_copy() == EditingContext::CommandPallet {
+        command_palette.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
+    }
 
     text.render(gl, ComputedPosition::origin(), &*globals, &screen_dims);
 

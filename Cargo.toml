@@ -6,10 +6,10 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-element_macro = { path = "./element_macro" }
 glow = "0.13.0"
 midi-control = "0.2.2"
 midir = "0.9.1"
 rusttype = "0.9.3"
 sdl2 = "0.36.0"
 serde = "1.0.193"
+# vst3-sys = { git = "https://github.com/RustAudio/vst3-sys" }

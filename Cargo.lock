@@ -88,22 +88,12 @@ dependencies = [
 name = "daw"
 version = "0.1.0"
 dependencies = [
- "element_macro",
  "glow",
  "midi-control",
  "midir",
  "rusttype",
  "sdl2",
  "serde",
-]
-
-[[package]]
-name = "element_macro"
-version = "0.1.0"
-dependencies = [
- "proc",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -201,12 +191,6 @@ name = "pkg-config"
 version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
-
-[[package]]
-name = "proc"
-version = "0.1.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7374c47d163806e1e2f12b63e5f2a6d6093e351a91a088b00fc654a354a5a332"
 
 [[package]]
 name = "proc-macro2"

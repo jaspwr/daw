@@ -1,12 +1,14 @@
 use std::{borrow::Borrow, cell::RefCell, rc::Rc};
 
 use crate::{
+    bind_reactives,
     global::Globals,
     ui::{
         d,
         element::{self, Element},
         frame_buf::FrameBuf,
         input::{e_button, e_f32_field},
+        misc_elements::e_text,
         p,
         reactive::Reactive,
         style::{c, Style},
@@ -51,39 +53,24 @@ pub fn fb_topbar(
         frame_bounding_box.clone(),
     );
 
-    let key_mod_text = Text::new(
+    let key_mod_element = e_text(
         gl,
-        String::new(),
-        20.,
-        &globals.main_font,
-        globals.colour_palette.text_primary,
-        Position::origin(),
-        needs_rerender.clone(),
-    );
-
-    let key_mod_element = Element::new(
-        gl,
-        p(100., 0.),
-        Size::Fixed(10.),
-        Size::Fixed(10.),
-        None,
-        Some(key_mod_text),
+        globals,
         needs_rerender.clone(),
         frame_bounding_box.clone(),
-        vec![],
+        p(100., 0.)
     );
 
-    key_mod_element.subscribe_mutation_to_reactive(
-        &globals.shortcuts_buffer.amount_modifier,
-        Box::new(move |element, new_value| {
-            let new_value = new_value.clone();
-            element.text_node.as_mut().unwrap().mutate(Box::new(move |text| {
-                text.text = new_value
-                    .map(|a| a.to_string())
-                    .unwrap_or_else(|| String::new());
-            }));
-        }),
-    );
+    let am = globals.shortcuts_buffer.amount_modifier.clone();
+    bind_reactives! {
+        key_mod_element {
+            [am] => (|e: &mut Element, am: Option<i32>| {
+                e.text_node.as_mut().unwrap().mutate(Box::new(move |text| {
+                    text.text = am.map(|a| a.to_string()).unwrap_or_else(|| String::new());
+                }));
+            })
+        }
+    }
 
     let container = Element::new(
         gl,

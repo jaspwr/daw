@@ -12,6 +12,7 @@ pub unsafe fn create_sdl2_context() -> (
     sdl2::video::Window,
     sdl2::EventPump,
     sdl2::video::GLContext,
+    sdl2::Sdl,
 ) {
     let sdl = sdl2::init().unwrap();
     let video = sdl.video().unwrap();
@@ -29,7 +30,7 @@ pub unsafe fn create_sdl2_context() -> (
     let gl = glow::Context::from_loader_function(|s| video.gl_get_proc_address(s) as *const _);
     let event_loop = sdl.event_pump().unwrap();
 
-    (gl, window, event_loop, gl_context)
+    (gl, window, event_loop, gl_context, sdl)
 }
 
 pub unsafe fn create_program(

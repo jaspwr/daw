@@ -1,44 +1,99 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
+use audio::{
+    audio_processor::{PluginDescription, PluginType},
+    Audio,
+};
 use element_creation_queue::fulfil_queue;
-use event_subscriptions::Key;
 use global::{EditingContext, Globals, PlayingState};
 use glow::*;
 use midi::*;
 use midir::{Ignore, MidiInput};
-use piano_roll::e_piano_roll;
 use sdl2::sys::{SDL_GetPerformanceCounter, SDL_GetPerformanceFrequency};
-use selection::Selection;
 use shortcuts::{k, universal_shortcuts};
 use top_bar::fb_topbar;
-use track::TrackData;
 use ui::{
     command_palette::fb_command_palette,
-    element::Element,
     frame_buf::FrameBuf,
     gl::RENDER_MODE_SOLID,
-    reactive::Reactive,
     style::{Colour, Style},
     text::{Font, Text},
     *,
 };
 
-use crate::{event_subscriptions::handle_event_subscriptions, shortcuts::key_from_symbol};
+use crate::{event_subscriptions::handle_event_subscriptions, shortcuts::key_from_symbol, audio::device::SDLAudioDevice};
 
+mod audio;
 mod event_subscriptions;
 mod global;
 mod midi;
-mod plugins;
 mod project;
 mod selection;
 mod shortcuts;
 mod track;
 mod ui;
 mod utils;
+// mod script;
 
 fn main() {
     unsafe {
-        let (gl, window, mut events_loop, _context) = gl::create_sdl2_context();
+        let (gl, window, mut events_loop, _context, sdl) = gl::create_sdl2_context();
+
+        let window_id = get_window_id(&window);
+        let mut audio = Audio::default();
+        // let mut instance = audio::load_vst2_plugin(&audio);
+
+        let plugin_desc = PluginDescription {
+            name: "".to_string(),
+            path: PathBuf::from("/home/jasper/dev/daw/ott/vital.so"),
+            type_: PluginType::Vst2,
+            instrument: true,
+        };
+
+        let mut plugin = plugin_desc.load(&audio);
+        plugin.show_gui(window_id as *mut std::ffi::c_void);
+
+        let events = vec![
+            MidiEvent {
+                time: 0.,
+                data: MidiEventData::NoteOn {
+                    note: NoteEvent {
+                        note: 60,
+                        velocity: 127,
+                    },
+                },
+            },
+            MidiEvent {
+                time: 0.,
+                data: MidiEventData::NoteOn {
+                    note: NoteEvent {
+                        note: 65,
+                        velocity: 127,
+                    },
+                },
+            },
+            MidiEvent {
+                time: 0.,
+                data: MidiEventData::NoteOn {
+                    note: NoteEvent {
+                        note: 69,
+                        velocity: 127,
+                    },
+                },
+            },
+            MidiEvent {
+                time: 0.,
+                data: MidiEventData::NoteOn {
+                    note: NoteEvent {
+                        note: 72,
+                        velocity: 127,
+                    },
+                },
+            },
+        ];
+
+
+        audio.device = Some(Box::new(SDLAudioDevice::new(&sdl, &audio)));
 
         let element_shader =
             gl::create_program(&gl, MAIN_VERTEX_SHADER_SOURCE, MAIN_FRAGMENT_SHADER_SOURCE);
@@ -155,6 +210,22 @@ fn main() {
 
         gl.delete_program(element_shader);
     }
+}
+
+fn get_window_id(window: &sdl2::video::Window) -> u64 {
+    let mut wm_info = sdl2::sys::SDL_SysWMinfo {
+        version: sdl2::sys::SDL_version {
+            major: 2,
+            minor: 0,
+            patch: 10,
+        },
+        subsystem: sdl2::sys::SDL_SYSWM_TYPE::SDL_SYSWM_UNKNOWN,
+        info: unsafe { std::mem::zeroed() },
+    };
+
+    unsafe { sdl2::sys::SDL_GetWindowWMInfo(window.raw(), &mut wm_info) };
+
+    unsafe { wm_info.info.x11.window }
 }
 
 fn main_loop(
